@@ -2,7 +2,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Pytorch ImageNet Training')
 
-# dataset相关 [data_set, data_path]
+#* dataset-related [data_set, data_path]
 parser.add_argument(
     '--data_set',
     type=str,
@@ -20,7 +20,8 @@ parser.add_argument(
     help='Path to dataset. default: '
 )
 
-# 训练参数 [train_batch_size, test_batch_size,num_epoch, gpus]
+
+#* training params [train_batch_size, test_batch_size,num_epoch, gpus]
 parser.add_argument(
     '--train_batch_size',
     type=int,
@@ -51,52 +52,6 @@ parser.add_argument(
     help='Select gpu_id to use. default: [0]',
 )
 
-# model相关 [arch, resume, test_only]
-parser.add_argument(
-    '--arch',
-    type=str,
-    default='vgg16',
-    help='Model architecture. default: resnet18'
-)
-
-parser.add_argument(
-    '--resume',
-    type=str,
-    default=None,
-    help='Path to checkpoint file. default: None'
-)
-
-parser.add_argument(
-    '--test_only',
-    action='store_true',
-    default=False,
-    help='Test model on testset. default: False'
-)
-
-# 文件操作相关 [job_dir, reset, rm_old_ckpt]
-parser.add_argument(
-    '--job_dir',
-    type=str,
-    default='experiments/',
-    help='The directory where the summaries will be sotred. default: ./experiment',
-)
-
-parser.add_argument(
-    '--reset',
-    action='store_true',
-    help='Reset the experiments directory?'
-)
-
-parser.add_argument(
-    '--rm_old_ckpt',
-    action='store_true',
-    help='remove old checkpoints except best model.',
-)
-
-
-
-
-# 训练参数[lr, lr_decay_step, momentum, weigth_decay]
 parser.add_argument(
     '--lr',
     type=float,
@@ -125,5 +80,50 @@ parser.add_argument(
     default=5e-4,   # for cifar10
     help='Weight decay.'
 )
+
+
+#* model-related [arch, resume, test_only]
+parser.add_argument(
+    '--arch',
+    type=str,
+    default='vgg16',
+    help='Model architecture. default: resnet18'
+)
+
+parser.add_argument(
+    '--resume',
+    type=str,
+    default=None,
+    help='Path to checkpoint file. default: None'
+)
+
+parser.add_argument(
+    '--test_only',
+    action='store_true',
+    default=False,
+    help='Test model on testset. default: False'
+)
+
+
+#* file-related [job_dir, reset, rm_old_ckpt]
+parser.add_argument(
+    '--job_dir',
+    type=str,
+    default='experiments/',
+    help='The directory where the summaries will be sotred. default: ./experiment',
+)
+
+parser.add_argument(
+    '--reset',
+    action='store_true',
+    help='Reset the experiments directory?'
+)
+
+parser.add_argument(
+    '--rm_old_ckpt',
+    action='store_true',
+    help='remove old checkpoints except best model.',
+)
+
 
 args = parser.parse_args()
