@@ -15,9 +15,7 @@ class FuseConv2d(nn.Conv2d):
         self.layeri_softmaxP = torch.zeros(1).cuda()
 
     def forward(self, input):
-        cout = self.weight.shape[0]
-        cin = self.weight.shape[1]
-        k = self.weight.shape[2]
+        cout, cin, k, _ = self.weight.shape
 
         fused_layeri_weight = torch.mm(self.layeri_softmaxP, self.weight.reshape(cout, -1))
         fused_layeri_bias = torch.mm(self.layeri_softmaxP, self.bias.unsqueeze(1)).squeeze()
