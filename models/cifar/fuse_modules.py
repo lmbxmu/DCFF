@@ -5,33 +5,45 @@ import torch.nn.functional as F
 class FuseConv2d(nn.Conv2d):
     def __init__(self, *kargs, **kwargs):
         super(FuseConv2d, self).__init__(*kargs, **kwargs)
-        #* layerid不是训练感知的, 只要在训练前初始化一次
+        #* setup non-training-aware attr.
         self.layerid = -1
-        #* layer的训练感知参数(layer无关, 所有layer相同): epoch
+
+        #* setup training-aware attr.
+        ##* non-layer-aware
         self.epoch = -1
-        #* layer的训练感知参数(layer有关, 不同layer不同): layeri_topm_filters_id, layeri_softmaxP
+        ##* layer-aware
         self.layeri_topm_filters_id = []
         self.layeri_softmaxP = torch.zeros(1).cuda()
 
     def forward(self, input):
-        # print(f'self.layerid:{self.layerid}')
-        # print(self.epoch)
-        # print(f'self.layeri_topm_filters_id:{self.layeri_topm_filters_id}')
-        # print(self.layeri_softmaxP, self.layeri_softmaxP.shape)
-        # exit(0)
+        cout = self.weight.shape[0]
+        cin = self.weight.shape[1]
+        k = self.weight.shape[2]
 
-        #* 计算该层融合层的filters的新权重
-        fused_filters_weight = self.weight
+        for filteri in range(cout):
+            if filteri == 0:
+                fused_filteri_weight = (self.weight.reshape(cout, -1) * self.layeri_softmaxP[filteri].unsqueeze(dim=1).cuda()).sum(0).unsqueeze(dim=0)
+                fused_layeri_weight = fused_filteri_weight
 
-        fused_filters_bias = self.bias
+                fused_filteri_bias = (self.bias * self.layeri_softmaxP[filteri].cuda()).sum(0).unsqueeze(dim=0)
+                fused_layeri_bias = fused_filteri_bias
 
-        # 将融合层中不是topm的filters置零
-        for layeri in range(fused_filters_weight.shape[0]):
-            if layeri not in self.layeri_topm_filters_id:
-                with torch.no_grad():
-                    fused_filters_weight[layeri].mul_(0)
-                    fused_filters_bias[layeri].mul_(0)
+            else:
+                fused_filteri_weight = (self.weight.reshape(cout, -1) * self.layeri_softmaxP[filteri].unsqueeze(dim=1).cuda()).sum(0).unsqueeze(dim=0)
+                fused_layeri_weight = torch.cat((fused_layeri_weight, fused_filteri_weight), 0)
 
-        output = F.conv2d(input=input, weight=fused_filters_weight, bias=fused_filters_bias, stride= self.stride, padding= self.padding, dilation= self.dilation, groups= self.groups)
+                fused_filteri_bias = (self.bias * self.layeri_softmaxP[filteri].cuda()).sum(0).unsqueeze(dim=0)
+                fused_layeri_bias = torch.cat((fused_layeri_bias, fused_filteri_bias), 0)
+
+        fused_layeri_weight = fused_layeri_weight.reshape(cout, cin, k, k)
+
+        # set the weight (not in top m) to zero
+        for filters in range(self.weight.shape[0]):
+            if filters not in self.layeri_topm_filters_id:
+                # with torch.no_grad():
+                fused_layeri_weight[filters].mul_(0)
+                fused_layeri_bias[filters].mul_(0)
+
+        output = F.conv2d(input=input, weight=fused_layeri_weight, bias=fused_layeri_bias, stride= self.stride, padding= self.padding, dilation= self.dilation, groups= self.groups)
 
         return output
