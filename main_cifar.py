@@ -168,9 +168,8 @@ def kl(X):
 
     return D
 
-#*
 default_cprate={
-    'vgg16': [0.5]*7+[0.5]*6,
+    'vgg16': [0.7]*7+[0.1]*6,
     'densenet40': [0.0]+[0.1]*6+[0.7]*6+[0.0]+[0.1]*6+[0.7]*6+[0.0]+[0.1]*6+[0.7]*5+[0.0],
     'googlenet': [0.10]+[0.7]+[0.5]+[0.8]*4+[0.5]+[0.6]*2,
     'resnet50':[0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
@@ -225,98 +224,66 @@ def main():
         
     # train
     else:
-        #* setup conv_modules.epochs
+        #* setup conv_modules / BN_modules
         conv_modules = []
         BN_modules = []
-        ReLU_modules = []
         for name, module in model.named_modules():
             if isinstance(module, nn.Conv2d):
                 conv_modules.append(module)
             if isinstance(module, nn.BatchNorm2d):
                 BN_modules.append(module)
-            if isinstance(module, nn.ReLU):
-                ReLU_modules.append(module)
 
-        #* 计算 conv_module layerid
+        #* setup conv_module.layerid / layers_cout
         layers_cout = []
         for layerid, module in enumerate(conv_modules):
             module.layerid = layerid
             layers_cout.append(module.out_channels)
+
+        #* compute layers_m
         layers_cout = np.asarray(layers_cout)
-        layers_cprate = np.asarray(default_cprate[args.arch])        
+        layers_cprate = np.asarray(default_cprate[args.arch])
         layers_m = np.ceil(layers_cout * (1-layers_cprate)).astype(int)
 
-        print(layers_m)
-
-        #*
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
+            #* compute t, t tends to 0 as epochs increases to num_epochs.
+            t = 1 - epoch / args.num_epochs
 
-            #* 计算t, t随着epochs增加, 逐渐趋于0
-            t = 1 - epoch / 150
-            # print(model.parameters)
+            #* compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
 
-            #* 计算每一层的 layers_param, layers_negaEudist, layers_softmaxP, layers_KL, layers_iScore
-            layers_param = []
-            layers_negaEudist = []
-            layers_softmaxP = []
-            layers_KL = []
-            layers_iScore = []
-
-            conv_id = 0
-            for param in model.parameters():
-                if param.dim() == 4:
-                    print(conv_id)
-                    conv_id += 1
-                    # 计算layeri 各 filter 的 参数
-                    layeri_param = torch.reshape(param.cpu().detach(), (param.shape[0], -1))
-
-                    # 计算layeri 各 filter 的 负欧氏距离
-                    layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)
-
-                    # 计算layeri 各 filter 的 softmaxP向量
-                    softmax = nn.Softmax(dim=1)
-                    layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))
-
-                    # 计算layeri 各 filter 的 KL散度向量
-                    layeri_KL = torch.from_numpy(kl(layeri_softmaxP))
-                    # layeri_KL_ = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)
-
-                    # 计算 layeri 各 filter 的 重要性分数
-                    layeri_iScore = torch.sum(layeri_KL, dim=1)
-
-                    # print('layeri_param:', layeri_param.shape, layeri_param[0])
-                    # print('layeri_negaEudist: ', layeri_negaEudist.shape, layeri_negaEudist[0])
-                    # print('layeri_softmaxP: ', layeri_softmaxP.shape, layeri_softmaxP[0])
-                    # print('layeri_KL: ', layeri_KL.shape, layeri_KL)
-                    # print('layeri_iScore: ', layeri_iScore.shape, layeri_iScore[0])
-                    # exit(0)
-
-                    layers_param.append(layeri_param)
-                    layers_negaEudist.append(layeri_negaEudist)
-                    layers_softmaxP.append(layeri_softmaxP)
-                    layers_KL.append(layeri_KL)
-                    layers_iScore.append(layeri_iScore)
-
-            # print(f'layers_param: {len(layers_param)}, {layers_param[0].shape}, \n {layers_param[0]}')
-            # print(f'layers_negaEudist: {len(layers_negaEudist)}, {layers_negaEudist[0].shape}, \n {layers_negaEudist[0]}')
-            # print(f'layers_softmaxP: {len(layers_softmaxP)}, {layers_softmaxP[0].shape}, \n {layers_softmaxP[0]}')
-            # print(f'layers_KL:, {len(layers_KL)}, {layers_KL[0].shape}, \n {layers_KL[0]}')
-            # print(f'layers_iScore:, {len(layers_iScore)}, {layers_iScore[0].shape}, \n {layers_iScore[0]}')
-            # exit(0)
-
-            #* 计算训练感知参数 epoch / layeri_topm_filters_id / layeri_softmaxP
+            start = time.time()
             for layerid, module in enumerate(conv_modules):
-                #* epoch
+                print(layerid)
+
+                param = module.weight
+
+                #* compute layeri_param
+                layeri_param = torch.reshape(param.detach(), (param.shape[0], -1))      #* layeri_param.shape=[cout, cin, k, k], layeri_param[j] means filterj's weight.
+
+                #* compute layeri_negaEudist
+                layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
+
+                #* compute layeri_softmaxP
+                softmax = nn.Softmax(dim=1)
+                layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
+
+                #* compute layeri_KL
+                layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
+                # layeri_KL = torch.from_numpy(kl(layeri_softmaxP.cpu())).to(device)
+
+                #* compute layeri_iScore
+                layeri_iScore = torch.sum(layeri_KL, dim=1)     #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
+
+
+                #* setup conv_module's traning-aware attr.
+                ##* setup conv_module.epoch
                 module.epoch = epoch
-                #* layeri_topm_filters_id
-                # print(layers_m[layerid])
-                # layers_m = [3]*13
-                # layers_m = [32, 32, 64, 64, 128, 128, 128, 256, 256, 256, 256, 256, 256]
-                layers_m = [20, 20, 39, 39, 77, 77, 77, 461, 461, 461, 461, 461, 461]
-                topm_value, topm_ids = torch.topk(layers_iScore[layerid], layers_m[layerid])
+
+                ##* setup conv_module.layeri_topm_filters_id
+                topm_value, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
                 module.layeri_topm_filters_id = topm_ids
-                #* layeri_softmaxP
-                module.layeri_softmaxP = layers_softmaxP[layerid]
+
+                ##* setup conv_module.layeri_softmaxP
+                module.layeri_softmaxP = layeri_softmaxP
 
             train(model, optimizer, loader.trainLoader, args, epoch)
             scheduler.step()
