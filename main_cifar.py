@@ -285,6 +285,8 @@ def main():
                 ##* setup conv_module.layeri_softmaxP
                 module.layeri_softmaxP = layeri_softmaxP
 
+            del t, param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_value, topm_ids
+
             train(model, optimizer, loader.trainLoader, args, epoch)
             scheduler.step()
             test_acc = float(test(model, loader.testLoader))
