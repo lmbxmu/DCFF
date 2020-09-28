@@ -28,28 +28,29 @@ print('==> Preparing data..')
 if args.data_set == 'cifar10':
     loader = cifar10.Data(args)
 
+default_cprate={
+    'vgg16': [0.7]*7+[0.1]*6,
+    'resnet50':[0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
+    'resnet56':[0.1]+[0.60]*35+[0.0]*2+[0.6]*6+[0.4]*3+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4],
+    'resnet110':[0.1]+[0.40]*36+[0.40]*36+[0.4]*36
+}
+
+#* compute cprate
+if args.cprate:
+    cprate = args.cprate
+else:
+    cprate = default_cprate[args.arch]
+
 
 # Model
 print('==> Building model..')
-if args.arch == 'vgg11':
-    model = VGG11()
-elif args.arch == 'vgg13':
-    model = VGG13()
-elif args.arch == 'vgg16':
-    model = VGG16()
-elif args.arch == 'vgg19':
-    model = VGG19()
+if args.arch == 'vgg16':
+    model = VGG('vgg16', cprate)
 
-elif args.arch == 'resnet18':
-    model = ResNet18()
-elif args.arch == 'resnet34':
-    model = ResNet34()
 elif args.arch == 'resnet50':
     model = ResNet50()
 elif args.arch == 'resnet101':
     model = ResNet101()
-elif args.arch == 'resnet152':
-    model = ResNet152()
 
 elif args.arch == 'googlenet':
     model = GoogLeNet()
@@ -126,56 +127,7 @@ def test(model, testLoader):
         )
     return accuracy.avg
 
-#*
-def kl(X):
 
-    """
-    Finds the pairwise Kullback-Leibler divergence
-    matrix between all rows in X.
-
-    Parameters
-    ----------
-    X : array_like, shape (n_samples, n_features)
-        Array of probability data. Each row must sum to 1.
-
-    Returns
-    -------
-    D : ndarray, shape (n_samples, n_samples)
-        The Kullback-Leibler divergence matrix. A pairwise matrix D such that D_{i, j}
-        is the divergence between the ith and jth vectors of the given matrix X.
-
-    Notes
-    -----
-    Based on code from Gordon J. Berman et al.
-    (https://github.com/gordonberman/MotionMapper)
-
-    References:
-    -----------
-    Berman, G. J., Choi, D. M., Bialek, W., & Shaevitz, J. W. (2014). 
-    Mapping the stereotyped behaviour of freely moving fruit flies. 
-    Journal of The Royal Society Interface, 11(99), 20140672.
-    """
-    X = np.asarray(X, dtype=np.float)
-    X_log = np.log(X)
-    X_log[np.isinf(X_log) | np.isnan(X_log)] = 0
-
-    entropies = -np.sum(X * X_log, axis=1)
-
-    D = np.matmul(-X, X_log.T)
-    D = D - entropies
-    D = D / np.log(2)
-    D *= (1 - np.eye(D.shape[0]))
-
-    return D
-
-default_cprate={
-    'vgg16': [0.7]*7+[0.1]*6,
-    'densenet40': [0.0]+[0.1]*6+[0.7]*6+[0.0]+[0.1]*6+[0.7]*6+[0.0]+[0.1]*6+[0.7]*5+[0.0],
-    'googlenet': [0.10]+[0.7]+[0.5]+[0.8]*4+[0.5]+[0.6]*2,
-    'resnet50':[0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
-    'resnet56':[0.1]+[0.60]*35+[0.0]*2+[0.6]*6+[0.4]*3+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4],
-    'resnet110':[0.1]+[0.40]*36+[0.40]*36+[0.4]*36
-}
 
 # main function
 def main():
@@ -241,8 +193,8 @@ def main():
 
         #* compute layers_m
         layers_cout = np.asarray(layers_cout)
-        layers_cprate = np.asarray(default_cprate[args.arch])
-        layers_m = np.ceil(layers_cout * (1-layers_cprate)).astype(int)
+        layers_cprate = np.asarray(cprate)
+        layers_m = (layers_cout * (1-layers_cprate)).astype(int)
 
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
             #* compute t, t tends to 0 as epochs increases to num_epochs.
@@ -268,7 +220,6 @@ def main():
 
                 #* compute layeri_KL
                 layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
-                # layeri_KL = torch.from_numpy(kl(layeri_softmaxP.cpu())).to(device)
 
                 #* compute layeri_iScore
                 layeri_iScore = torch.sum(layeri_KL, dim=1)     #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
@@ -279,13 +230,13 @@ def main():
                 module.epoch = epoch
 
                 ##* setup conv_module.layeri_topm_filters_id
-                topm_value, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
-                module.layeri_topm_filters_id = topm_ids
+                _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
+                # module.layeri_topm_filters_id = topm_ids
 
                 ##* setup conv_module.layeri_softmaxP
-                module.layeri_softmaxP = layeri_softmaxP
+                module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
 
-            del t, param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_value, topm_ids
+            del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
             train(model, optimizer, loader.trainLoader, args, epoch)
             scheduler.step()
