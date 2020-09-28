@@ -23,5 +23,4 @@ class FuseConv2d(nn.Conv2d):
         fused_layeri_weight = fused_layeri_weight.reshape(-1, cin, k, k)
 
         output = F.conv2d(input=input, weight=fused_layeri_weight, bias=fused_layeri_bias, stride= self.stride, padding= self.padding, dilation= self.dilation, groups= self.groups)
-
         return output
