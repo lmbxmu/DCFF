@@ -19,7 +19,7 @@ import numpy as np
 # init
 device = torch.device(f'cuda:{args.gpus[0]}') if torch.cuda.is_available() else 'cpu'
 checkpoint = utils.CheckPoint(args)
-logger = utils.GetLogger(os.path.join(args.job_dir + '_logger.log'))
+logger = utils.GetLogger(os.path.join(args.job_dir + '/logger.log'))
 loss_func = nn.CrossEntropyLoss()
 
 
@@ -30,31 +30,51 @@ if args.data_set == 'cifar10':
 
 default_cprate={
     'vgg16': [0.7]*7+[0.1]*6,
-    'resnet50':[0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
     'resnet56':[0.1]+[0.60]*35+[0.0]*2+[0.6]*6+[0.4]*3+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4],
-    'resnet110':[0.1]+[0.40]*36+[0.40]*36+[0.4]*36
+    'resnet110':[0.1]+[0.40]*36+[0.40]*36+[0.4]*36,
+
+    'resnet50':[0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
+    
 }
 
 #* compute cprate
 if args.cprate:
-    cprate = args.cprate
+    import re
+    cprate_str=args.cprate
+    cprate_str_list=cprate_str.split('+')
+    pat_cprate = re.compile(r'\d+\.\d*')
+    pat_num = re.compile(r'\*\d+')
+    cprate=[]
+    for x in cprate_str_list:
+        num=1
+        find_num=re.findall(pat_num,x)
+        if find_num:
+            assert len(find_num) == 1
+            num=int(find_num[0].replace('*',''))
+        find_cprate = re.findall(pat_cprate, x)
+        assert len(find_cprate)==1
+        cprate+=[float(find_cprate[0])]*num
 else:
     cprate = default_cprate[args.arch]
 
+print(len(cprate), cprate)
+# exit(0)
 
 # Model
 print('==> Building model..')
 if args.arch == 'vgg16':
-    model = VGG('vgg16', cprate)
+    model = VGG(vgg_name='vgg16', cprate=cprate)
 
-elif args.arch == 'resnet50':
-    model = ResNet50()
-elif args.arch == 'resnet101':
-    model = ResNet101()
+elif args.arch == 'resnet56':
+    model = resnet56(cprate=cprate)
+elif args.arch == 'resnet110':
+    model = resnet110(cprate=cprate)
 
 elif args.arch == 'googlenet':
     model = GoogLeNet()
 
+# print(model)
+# exit(0)
 
 model = model.to(device)
 
@@ -70,11 +90,8 @@ def train(model, optimizer, trainLoader, args, epoch):
     losses = utils.AverageMeter()
     accuracy = utils.AverageMeter()
     print_freq = len(trainLoader.dataset) // args.train_batch_size // 10
+
     start_time = time.time()
-
-    total = 0
-    correct = 0
-
 
     for batch_idx, (inputs, targets) in enumerate(trainLoader):
         inputs, targets = inputs.to(device), targets.to(device)
@@ -92,7 +109,7 @@ def train(model, optimizer, trainLoader, args, epoch):
             current_time = time.time()
             cost_time = current_time - start_time
             logger.info(
-                f'Epoch[{epoch+1}] ({batch_idx * args.train_batch_size} / {len(trainLoader.dataset)}):\t'
+                f'Epoch[{epoch}] ({batch_idx * args.train_batch_size} / {len(trainLoader.dataset)}):\t'
                 f'Loss: {float(losses.avg):.4f}\t'
                 f'Acc: {float(accuracy.avg):.2f}%\t\t'
                 f'Time: {cost_time:.2f}s'
@@ -176,14 +193,14 @@ def main():
         
     # train
     else:
-        #* setup conv_modules / BN_modules
+        #* setup conv_modules
         conv_modules = []
-        BN_modules = []
         for name, module in model.named_modules():
             if isinstance(module, nn.Conv2d):
                 conv_modules.append(module)
-            if isinstance(module, nn.BatchNorm2d):
-                BN_modules.append(module)
+
+        # print(conv_modules)
+        # exit(0)
 
         #* setup conv_module.layerid / layers_cout
         layers_cout = []
@@ -196,12 +213,17 @@ def main():
         layers_cprate = np.asarray(cprate)
         layers_m = (layers_cout * (1-layers_cprate)).astype(int)
 
+        # print(layers_cout.shape, layers_cout)
+        # print(layers_m.shape, layers_m)
+        # exit(0)
+
+
+
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
             #* compute t, t tends to 0 as epochs increases to num_epochs.
             t = 1 - epoch / args.num_epochs
 
             #* compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
-
             start = time.time()
             for layerid, module in enumerate(conv_modules):
                 print(layerid)
@@ -236,6 +258,8 @@ def main():
                 ##* setup conv_module.layeri_softmaxP
                 module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
 
+            print(f'cost: {time.time()-start}')
+            # exit(0)
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
             train(model, optimizer, loader.trainLoader, args, epoch)
