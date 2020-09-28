@@ -57,8 +57,6 @@ if args.cprate:
 else:
     cprate = default_cprate[args.arch]
 
-print(len(cprate), cprate)
-# exit(0)
 
 # Model
 print('==> Building model..')
@@ -73,8 +71,6 @@ elif args.arch == 'resnet110':
 elif args.arch == 'googlenet':
     model = GoogLeNet()
 
-# print(model)
-# exit(0)
 
 model = model.to(device)
 
@@ -199,8 +195,6 @@ def main():
             if isinstance(module, nn.Conv2d):
                 conv_modules.append(module)
 
-        # print(conv_modules)
-        # exit(0)
 
         #* setup conv_module.layerid / layers_cout
         layers_cout = []
@@ -212,10 +206,6 @@ def main():
         layers_cout = np.asarray(layers_cout)
         layers_cprate = np.asarray(cprate)
         layers_m = (layers_cout * (1-layers_cprate)).astype(int)
-
-        # print(layers_cout.shape, layers_cout)
-        # print(layers_m.shape, layers_m)
-        # exit(0)
 
 
 
@@ -259,7 +249,6 @@ def main():
                 module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
 
             print(f'cost: {time.time()-start}')
-            # exit(0)
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
             train(model, optimizer, loader.trainLoader, args, epoch)
