@@ -25,14 +25,14 @@ parser.add_argument(
 parser.add_argument(
     '--train_batch_size',
     type=int,
-    default=512,
+    default=256,
     help='Batch size of all GPUS. default: 32'
 )
 
 parser.add_argument(
     '--test_batch_size',
     type=int,
-    default=100,
+    default=256,
     help='Batch size of all GPUS. default: 16'
 )
 
@@ -63,7 +63,7 @@ parser.add_argument(
     '--lr_decay_step',
     type=int,
     nargs='+',
-    default=[5, 10],    # for cifar10
+    default=[50, 100],    # for cifar10
     help='The iterval of learning rate decay (for cifar10). default: [50, 100]'
 )
 
@@ -109,21 +109,17 @@ parser.add_argument(
 parser.add_argument(
     '--job_dir',
     type=str,
-    default='experiments/',
+    default='/media/disk1/cbh/EXP/2020/09/KL-score/exp/',
     help='The directory where the summaries will be sotred. default: ./experiment',
 )
 
-parser.add_argument(
-    '--reset',
-    action='store_true',
-    help='Reset the experiments directory?'
-)
 
+#* pruning-related
 parser.add_argument(
-    '--rm_old_ckpt',
-    action='store_true',
-    help='remove old checkpoints except best model.',
+    '--cprate',
+    type=str,
+    default=None,
+    help='compress rate of each conv'
 )
-
 
 args = parser.parse_args()
