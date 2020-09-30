@@ -15,6 +15,8 @@ from utils.options import args
 #*
 import numpy as np
 from collections import OrderedDict
+from thop import profile
+
 
 
 # init
@@ -43,9 +45,10 @@ default_cprate={
                 [0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+
                 [0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+
                 [0.4]+[0.5]+[0.6],
-
+    'googlenet':[0.0]+[0.1]+[0.2]+[0.3]+[0.4]+[0.5]+[0.6]+[0.7]+[0.8]+[0.9],
 
     'resnet50': [0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
+    
 }
 
 
@@ -64,31 +67,48 @@ resnet_block_num = {
     'resnet56': 9,
     'resnet110':18,
 }
-_cprate = []
-if 'resnet' in args.arch:
+layer_wise_cprate = []
+if 'vgg' in args.arch:
+    layer_wise_cprate = cprate
+
+elif 'resnet' in args.arch:
     block_conv2_cprate = [val for val in cprate[-3:] for i in range(resnet_block_num[args.arch])]
     for item in zip(cprate[0:-3], block_conv2_cprate):
-        _cprate += list(item)
-    _cprate.insert(0, cprate[-3])
-    cprate = _cprate
+        layer_wise_cprate += list(item)
+    layer_wise_cprate.insert(0, cprate[-3])
 
-# logger.info(f'layer-wise cprate: \n{cprate}')
+elif 'googlenet' == args.arch:
+    block_cprate = [val for val in cprate[1:] for i in range(3)]
+    layer_wise_cprate = cprate[0:1]+block_cprate
+
+print(f'layer-wise cprate: \n{layer_wise_cprate}')
+# exit(0)
 
 # Model
 print('==> Building model..')
 if args.arch == 'vgg16':
-    model = Fused_VGG(vgg_name='vgg16', cprate=cprate)
-    compact_model = Compact_VGG(vgg_name='vgg16', cprate=cprate)
+    model = Fused_VGG(vgg_name='vgg16', cprate=layer_wise_cprate)
+    compact_model = Compact_VGG(vgg_name='vgg16', cprate=layer_wise_cprate)
+    origin_model = OriginVGG(vgg_name='vgg16')
 
 elif args.arch == 'resnet56':
-    model = fused_resnet56(cprate=cprate)
-    compact_model = compact_resnet56(cprate=cprate)
+    model = fused_resnet56(cprate=layer_wise_cprate)
+    compact_model = compact_resnet56(cprate=layer_wise_cprate)
+    origin_model = origin_resnet56()
 
 elif args.arch == 'resnet110':
-    model = fused_resnet110(cprate=cprate)
-    compact_model = compact_resnet110(cprate=cprate)
+    model = fused_resnet110(cprate=layer_wise_cprate)
+    compact_model = compact_resnet110(cprate=layer_wise_cprate)
+    origin_model = origin_resnet110()
 
+elif args.arch == 'googlenet':
+    model = FusedGoogLeNet(cprate)
+    compact_model = CompactGoogLeNet(cprate)
+    origin_model = OriginGoogLeNet()
 
+# print(model)
+# print(compact_model)
+# exit(0)
 model = model.to(device)
 
 
@@ -131,7 +151,6 @@ def train(model, optimizer, trainLoader, args, epoch):
             start_time = current_time
 
 
-
 # Testing function
 def test(model, testLoader):
     global best_acc
@@ -159,10 +178,9 @@ def test(model, testLoader):
     return accuracy.avg
 
 
-
 # main function
 def main():
-    global model, compact_model
+    global model, compact_model, origin_model
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, 
                         momentum=args.momentum, weight_decay=args.weight_decay)
@@ -195,6 +213,8 @@ def main():
         scheduler.load_state_dict(resume_ckpt['scheduler'])
         start_epoch = resume_ckpt['epoch']
         best_acc = resume_ckpt['best_acc']
+
+
     # Train from scratch
     else:
         start_epoch = 0
@@ -204,26 +224,31 @@ def main():
     # test only
     if args.test_only:
         test(model, loader.testLoader)
-        
+
+
     # train
     else:
-        #* setup conv_modules
-        conv_modules = []
+        #* setup fused_conv_modules
+        fused_conv_modules = []
         for name, module in model.named_modules():
-            if isinstance(module, nn.Conv2d):
-                conv_modules.append(module)
-
+            if isinstance(module, FuseConv2d):
+                fused_conv_modules.append(module)
 
         #* setup conv_module.layerid / layers_cout
         layers_cout = []
-        for layerid, module in enumerate(conv_modules):
+        for layerid, module in enumerate(fused_conv_modules):
             module.layerid = layerid
             layers_cout.append(module.out_channels)
 
         #* compute layers_m
         layers_cout = np.asarray(layers_cout)
-        layers_cprate = np.asarray(cprate)
+        layers_cprate = np.asarray(layer_wise_cprate)
+        # print(layers_cout.shape, layers_cprate.shape)
+        # exit(0)
         layers_m = (layers_cout * (1-layers_cprate)).astype(int)
+        print(layers_cout)
+        print(layers_m)
+        # exit(0)
 
 
 
@@ -234,7 +259,7 @@ def main():
 
             #* compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
             start = time.time()
-            for layerid, module in enumerate(conv_modules):
+            for layerid, module in enumerate(fused_conv_modules):
                 print(layerid)
 
                 param = module.weight
@@ -253,7 +278,7 @@ def main():
                 layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
 
                 #* compute layeri_iScore
-                layeri_iScore = torch.mul(torch.mean(layeri_KL, dim=1), -1)     #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
+                layeri_iScore = torch.mean(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
 
 
                 #* setup conv_module's traning-aware attr.
@@ -278,6 +303,8 @@ def main():
             print(f'cost: {time.time()-start}')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
+            # exit(0)
+
             train(model, optimizer, loader.trainLoader, args, epoch)
             scheduler.step()
             test_acc = float(test(model, loader.testLoader))
@@ -296,32 +323,41 @@ def main():
             }
             checkpoint.save_model(state, epoch + 1, is_best)
 
-            #* Compute compact_state_dict
-            compact_state_dict = OrderedDict()
-            for name, module in model.named_modules():
-                if isinstance(module, nn.Conv2d):
+        #* Compute compact_state_dict
+        compact_state_dict = OrderedDict()
+        for name, module in model.named_modules():
+            if isinstance(module, nn.Conv2d):
+                if isinstance(module, FuseConv2d):
                     compact_state_dict[name+'.weight'] = module.fused_weight
                     if module.bias is not None:
                         compact_state_dict[name+'.bias'] = module.fused_bias
-
-                if isinstance(module, nn.BatchNorm2d):
+                else:
                     compact_state_dict[name+'.weight'] = module.weight
-                    compact_state_dict[name+'.bias'] = module.bias
-                    compact_state_dict[name+'.running_mean'] = module.running_mean
-                    compact_state_dict[name+'.running_var'] = module.running_var
-                    compact_state_dict[name+'.num_batches_tracked'] = module.num_batches_tracked
-                if isinstance(module, nn.Linear):
-                    compact_state_dict[name+'.weight'] = module.weight
-                    compact_state_dict[name+'.bias'] = module.bias
+                    if module.bias is not None:
+                        compact_state_dict[name+'.bias'] = module.bias
+            if isinstance(module, nn.BatchNorm2d):
+                compact_state_dict[name+'.weight'] = module.weight
+                compact_state_dict[name+'.bias'] = module.bias
+                compact_state_dict[name+'.running_mean'] = module.running_mean
+                compact_state_dict[name+'.running_var'] = module.running_var
+                compact_state_dict[name+'.num_batches_tracked'] = module.num_batches_tracked
+            if isinstance(module, nn.Linear):
+                compact_state_dict[name+'.weight'] = module.weight
+                compact_state_dict[name+'.bias'] = module.bias
 
-            
+        print(len(model.state_dict().keys()))
+        print(model.state_dict().keys())
+        print(len(compact_state_dict.keys()))
+        print(compact_state_dict.keys())
+        # exit(0)
 
         #* Test compact model
-        # compact_model = compact_model.to(device)
-        # compact_model.load_state_dict(compact_state_dict)
+        compact_model = compact_model.to(device)
+        compact_model.load_state_dict(compact_state_dict)
 
-        # logger.info(f'Compact model:')
-        # compact_test_acc = float(test(compact_model, loader.testLoader))
+
+        logger.info(f'Compact model:')
+        compact_test_acc = float(test(compact_model, loader.testLoader))
 
         #* Save compact_state_dict
         compact_model_state = {
@@ -334,9 +370,18 @@ def main():
         checkpoint.save_model(state, epoch + 1, is_compact=True)
 
 
-
-
         logger.info(f'Best accuracy: {best_acc:.3f}')
+
+        #* calculate model size
+        # input_image_size = 32
+        # input_image = torch.randn(1, 3, input_image_size, input_image_size).cuda()
+
+        # flops, params = profile(compact_model, inputs=(input_image,))
+        # logger.info(f'FLOPs:{flops}, Params:{params}')
+
+        # origin_model = origin_model.to(device)
+        # flops, params = profile(origin_model, inputs=(input_image,))
+        # logger.info(f'FLOPs:{flops}, Params:{params}')
 
 if __name__ == '__main__':
     main()
