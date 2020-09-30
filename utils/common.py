@@ -10,19 +10,16 @@ import torch
 from pathlib import Path
 
 
-# 计算和保存当前参数的值
 class AverageMeter(object):
     def __init__(self):
         self.reset()
     
-    # 初始化参数
     def reset(self):
-        self.val = 0  # 当前值
-        self.avg = 0  # 平均值
-        self.sum = 0  # 总和
-        self.count = 0  #计数
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
 
-    # 更新参数
     def update(self, val, n=1):
         self.val = val
         self.sum += val*n
@@ -83,7 +80,7 @@ def GetLogger(file_path):
 
     return logger
 
-# 计算acc，top-1和top-k
+# compute top-1/top-k acc
 def accuracy(output, target, topk=(1,)):
     with torch.no_grad():
         maxk = max(topk)
