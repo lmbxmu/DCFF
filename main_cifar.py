@@ -14,6 +14,7 @@ from utils.options import args
 
 #*
 import numpy as np
+from collections import OrderedDict
 
 
 # init
@@ -29,50 +30,67 @@ if args.data_set == 'cifar10':
     loader = cifar10.Data(args)
 
 default_cprate={
-    'vgg16': [0.7]*7+[0.1]*6,
-    'resnet56':[0.1]+[0.60]*35+[0.0]*2+[0.6]*6+[0.4]*3+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4]+[0.1]+[0.4],
-    'resnet110':[0.1]+[0.40]*36+[0.40]*36+[0.4]*36,
+    'vgg16':    [0.7]*7+[0.1]*6,
+    # 'resnet56': [0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+
+    #             [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+
+    #             [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+
+    #             [0.0]+[0.0]+[0.0],
+    'resnet56': [0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+
+                [0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+
+                [0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+
+                [0.4]+[0.5]+[0.6],
+    'resnet110':[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+
+                [0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+
+                [0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+
+                [0.4]+[0.5]+[0.6],
 
-    'resnet50':[0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
-    
+
+    'resnet50': [0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
 }
+
+
 
 #* compute cprate
 if args.cprate:
-    import re
-    cprate_str=args.cprate
-    cprate_str_list=cprate_str.split('+')
-    pat_cprate = re.compile(r'\d+\.\d*')
-    pat_num = re.compile(r'\*\d+')
-    cprate=[]
-    for x in cprate_str_list:
-        num=1
-        find_num=re.findall(pat_num,x)
-        if find_num:
-            assert len(find_num) == 1
-            num=int(find_num[0].replace('*',''))
-        find_cprate = re.findall(pat_cprate, x)
-        assert len(find_cprate)==1
-        cprate+=[float(find_cprate[0])]*num
+    cprate = eval(args.cprate)
 else:
-    cprate = default_cprate[args.arch]
+    cprate = cprate = default_cprate[args.arch]
 
+logger.info(f'cprate: \n{cprate}')
+
+
+#* compute resnet lawer-wise cprate
+resnet_block_num = {
+    'resnet56': 9,
+    'resnet110':18,
+}
+_cprate = []
+if 'resnet' in args.arch:
+    block_conv2_cprate = [val for val in cprate[-3:] for i in range(resnet_block_num[args.arch])]
+    for item in zip(cprate[0:-3], block_conv2_cprate):
+        _cprate += list(item)
+    _cprate.insert(0, cprate[-3])
+    cprate = _cprate
+
+# logger.info(f'layer-wise cprate: \n{cprate}')
 
 # Model
 print('==> Building model..')
 if args.arch == 'vgg16':
-    model = VGG(vgg_name='vgg16', cprate=cprate)
+    model = Fused_VGG(vgg_name='vgg16', cprate=cprate)
+    compact_model = Compact_VGG(vgg_name='vgg16', cprate=cprate)
 
 elif args.arch == 'resnet56':
-    model = resnet56(cprate=cprate)
-elif args.arch == 'resnet110':
-    model = resnet110(cprate=cprate)
+    model = fused_resnet56(cprate=cprate)
+    compact_model = compact_resnet56(cprate=cprate)
 
-elif args.arch == 'googlenet':
-    model = GoogLeNet()
+elif args.arch == 'resnet110':
+    model = fused_resnet110(cprate=cprate)
+    compact_model = compact_resnet110(cprate=cprate)
 
 
 model = model.to(device)
+
 
 if len(args.gpus) != 1:
     model = nn.DataParallel(model, device_ids=args.gpus)
@@ -144,7 +162,7 @@ def test(model, testLoader):
 
 # main function
 def main():
-    global model
+    global model, compact_model
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, 
                         momentum=args.momentum, weight_decay=args.weight_decay)
@@ -163,7 +181,7 @@ def main():
         if len(args.gpus) == 1:  # load model when use single gpu
             model.load_state_dict(state_dict)
         else:                    # load model when use multi-gpus
-            from collections import OrderedDict
+            # from collections import OrderedDict
             new_state_dict = OrderedDict()
             for k, v in state_dict.items():
                 if 'module' not in k:
@@ -211,7 +229,8 @@ def main():
 
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
             #* compute t, t tends to 0 as epochs increases to num_epochs.
-            t = 1 - epoch / args.num_epochs
+            # t = 1 - epoch / args.num_epochs
+            t=eval(args.t_expression)
 
             #* compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
             start = time.time()
@@ -234,7 +253,7 @@ def main():
                 layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
 
                 #* compute layeri_iScore
-                layeri_iScore = torch.sum(layeri_KL, dim=1)     #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
+                layeri_iScore = torch.mul(torch.mean(layeri_KL, dim=1), -1)     #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
 
 
                 #* setup conv_module's traning-aware attr.
@@ -247,6 +266,14 @@ def main():
 
                 ##* setup conv_module.layeri_softmaxP
                 module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
+
+                ###* printP
+                bottom_num = layers_cout[layerid]-layers_m[layerid]
+                if bottom_num > 0:
+                    _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
+                    with open(args.job_dir + '/softmaxP.log',"a") as f:
+                        f.write(f'==================== Epoch:{epoch}, layer {layerid}, m:{len(topm_ids)} ==================== \
+                                \n\nP(m*n):{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)} \n\n\n')
 
             print(f'cost: {time.time()-start}')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
@@ -268,7 +295,32 @@ def main():
                 'best_acc': best_acc,
             }
             checkpoint.save_model(state, epoch + 1, is_best)
-        
+
+            #* 
+            compact_state_dict = OrderedDict()
+            for name, module in model.named_modules():
+                if isinstance(module, nn.Conv2d):
+                    compact_state_dict[name+'.weight'] = module.fused_weight
+                    if module.bias is not None:
+                        compact_state_dict[name+'.bias'] = module.fused_bias
+
+                if isinstance(module, nn.BatchNorm2d):
+                    compact_state_dict[name+'.weight'] = module.weight
+                    compact_state_dict[name+'.bias'] = module.bias
+                    compact_state_dict[name+'.running_mean'] = module.running_mean
+                    compact_state_dict[name+'.running_var'] = module.running_var
+                    compact_state_dict[name+'.num_batches_tracked'] = module.num_batches_tracked
+                if isinstance(module, nn.Linear):
+                    compact_state_dict[name+'.weight'] = module.weight
+                    compact_state_dict[name+'.bias'] = module.bias
+            
+            compact_model.load_state_dict(compact_state_dict)
+
+        compact_model = compact_model.to(device)
+        logger.info(f'Compact model:')
+        compact_test_acc = float(test(compact_model, loader.testLoader))
+
+
         logger.info(f'Best accuracy: {best_acc:.3f}')
 
 if __name__ == '__main__':
