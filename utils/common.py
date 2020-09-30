@@ -41,15 +41,7 @@ class CheckPoint():
         self.ckpt_dir = self.job_dir / 'checkpoint'  
         self.run_dir = self.job_dir / 'run'
 
-        if args.reset:
-            print('rm -rf ' + args.job_dir)
-            os.system('rm -rf ' + args.job_dir)
-        
-        if args.rm_old_ckpt:
-            os.chdir(str(self.ckpt_dir))
-            os.system('ls | grep [0-9] | xargs rm')
-            os.chdir('../..')
-            
+
         def _make_dir(path):
             if not os.path.exists(path):
                 os.makedirs(path)
@@ -65,13 +57,16 @@ class CheckPoint():
                 f.write('{}: {}\n'.format(arg, getattr(args, arg)))
             f.write('\n')
             
-    def save_model(self, state, epoch, is_best):
+    def save_model(self, state, epoch, is_best=False, is_compact=False):
         save_path = f'{self.ckpt_dir}/model_{epoch:03d}.pt'
         torch.save(state, save_path)
         print('Save checkpoint.')
         if is_best:
             shutil.copyfile(save_path, f'{self.ckpt_dir}/model_best.pt')
             print('Save best model.')
+        if is_compact:
+            shutil.copyfile(save_path, f'{self.ckpt_dir}/model_compact.pt')
+            print('Save compact model.')
 
 def GetLogger(file_path):
     logger = logging.getLogger('gal')
