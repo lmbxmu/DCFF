@@ -31,10 +31,14 @@ if args.data_set == 'cifar10':
 
 default_cprate={
     'vgg16':    [0.7]*7+[0.1]*6,
-    'resnet56': [0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+
-                [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+
-                [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+
-                [0.0]+[0.0]+[0.0],
+    # 'resnet56': [0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+
+    #             [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+
+    #             [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+
+    #             [0.0]+[0.0]+[0.0],
+    'resnet56': [0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+
+                [0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+
+                [0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+
+                [0.4]+[0.5]+[0.6],
     'resnet110':[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+
                 [0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+
                 [0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+
@@ -67,6 +71,8 @@ if 'resnet' in args.arch:
         _cprate += list(item)
     _cprate.insert(0, cprate[-3])
     cprate = _cprate
+
+# logger.info(f'layer-wise cprate: \n{cprate}')
 
 # Model
 print('==> Building model..')
@@ -290,7 +296,7 @@ def main():
             }
             checkpoint.save_model(state, epoch + 1, is_best)
 
-            #* 
+            #* Compute compact_state_dict
             compact_state_dict = OrderedDict()
             for name, module in model.named_modules():
                 if isinstance(module, nn.Conv2d):
@@ -307,12 +313,27 @@ def main():
                 if isinstance(module, nn.Linear):
                     compact_state_dict[name+'.weight'] = module.weight
                     compact_state_dict[name+'.bias'] = module.bias
-            
-            compact_model.load_state_dict(compact_state_dict)
 
-        compact_model = compact_model.to(device)
-        logger.info(f'Compact model:')
-        compact_test_acc = float(test(compact_model, loader.testLoader))
+            
+
+        #* Test compact model
+        # compact_model = compact_model.to(device)
+        # compact_model.load_state_dict(compact_state_dict)
+
+        # logger.info(f'Compact model:')
+        # compact_test_acc = float(test(compact_model, loader.testLoader))
+
+        #* Save compact_state_dict
+        compact_model_state = {
+            'state_dict': compact_state_dict,
+            'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            'epoch': epoch + 1,
+            'best_acc': best_acc,
+        }
+        checkpoint.save_model(state, epoch + 1, is_compact=True)
+
+
 
 
         logger.info(f'Best accuracy: {best_acc:.3f}')
