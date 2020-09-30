@@ -82,7 +82,7 @@ elif 'googlenet' == args.arch:
     layer_wise_cprate = cprate[0:1]+block_cprate
 
 print(f'layer-wise cprate: \n{layer_wise_cprate}')
-# exit(0)
+
 
 # Model
 print('==> Building model..')
@@ -106,9 +106,7 @@ elif args.arch == 'googlenet':
     compact_model = CompactGoogLeNet(cprate)
     origin_model = OriginGoogLeNet()
 
-# print(model)
-# print(compact_model)
-# exit(0)
+
 model = model.to(device)
 
 
@@ -243,12 +241,9 @@ def main():
         #* compute layers_m
         layers_cout = np.asarray(layers_cout)
         layers_cprate = np.asarray(layer_wise_cprate)
-        # print(layers_cout.shape, layers_cprate.shape)
-        # exit(0)
         layers_m = (layers_cout * (1-layers_cprate)).astype(int)
         print(layers_cout)
         print(layers_m)
-        # exit(0)
 
 
 
@@ -303,7 +298,6 @@ def main():
             print(f'cost: {time.time()-start}')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
-            # exit(0)
 
             train(model, optimizer, loader.trainLoader, args, epoch)
             scheduler.step()
@@ -345,11 +339,6 @@ def main():
                 compact_state_dict[name+'.weight'] = module.weight
                 compact_state_dict[name+'.bias'] = module.bias
 
-        print(len(model.state_dict().keys()))
-        print(model.state_dict().keys())
-        print(len(compact_state_dict.keys()))
-        print(compact_state_dict.keys())
-        # exit(0)
 
         #* Test compact model
         compact_model = compact_model.to(device)
