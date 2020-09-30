@@ -84,6 +84,36 @@ class Compact_VGG(nn.Module):
 
 
 
+
+#*================================
+#* origin model
+class OriginVGG(nn.Module):
+    def __init__(self, vgg_name, num_class=10):
+        super(OriginVGG, self).__init__()
+        self.features = self._make_layers(cfg[vgg_name])
+        self.classifier = nn.Linear(512, 10)
+
+
+    def forward(self, x):
+        out = self.features(x)
+        out = out.view(out.size(0), -1)
+        out = self.classifier(out)
+        return out
+    
+    def _make_layers(self, cfg):
+        layers = []
+        in_channels = 3
+        for x in cfg:
+            if x == 'M':
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            else:
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                           nn.BatchNorm2d(x),
+                           nn.ReLU(inplace=True)]
+                in_channels = x
+        layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+        return nn.Sequential(*layers)
+
 # def test():
 #     cprate = [0.7]*7+[0.1]*6
     # model = Compact_VGG('vgg16', cprate)
