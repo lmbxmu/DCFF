@@ -109,7 +109,7 @@ parser.add_argument(
 parser.add_argument(
     '--job_dir',
     type=str,
-    default='/media/disk1/cbh/EXP/2020/09/KL-score/exp/',
+    default='/media/disk1/cbh/EXP/2020/09/exp-tmp',
     help='The directory where the summaries will be sotred. default: ./experiment',
 )
 
@@ -120,6 +120,13 @@ parser.add_argument(
     type=str,
     default=None,
     help='compress rate of each conv'
+)
+
+parser.add_argument(
+    '--t_expression',
+    type=str,
+    default='1 - epoch / args.num_epochs',
+    help='Expression of t, t=F(epoch, args.num_epochs)'
 )
 
 args = parser.parse_args()
