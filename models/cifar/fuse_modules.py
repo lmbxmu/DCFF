@@ -36,8 +36,6 @@ class FuseConv2d(nn.Conv2d):
         self.fused_bias = fused_layeri_bias
 
 
-        output = F.conv2d(input=input, weight=fused_layeri_weight, bias=fused_layeri_bias, stride= self.stride, padding= self.padding, dilation= self.dilation, groups= self.groups)
+        output = F.conv2d(input=input, weight=fused_layeri_weight, bias=fused_layeri_bias, stride=self.stride, padding=self.padding, dilation=self.dilation, groups=self.groups)
         return output
-
-
-
+    
