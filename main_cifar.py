@@ -32,23 +32,60 @@ if args.data_set == 'cifar10':
     loader = cifar10.Data(args)
 
 default_cprate={
-    'vgg16':    [0.7]*7+[0.1]*6,
+    #* vgg16-ABCPlus
+    # 'vgg16':    [0.2]*3+[0.4]+[0.7]+[0.2]+[0.8]+[0.7]+[0.8]+[0.7]+[0.2]+[0.8]+[0.9],
+
+    #* vgg16-HRankPlus
+    # 'vgg16':    [0.21]*7+[0.75]*5+[0.0],
+    # 'vgg16':    [0.3]*7+[0.75]*5+[0.0],
+    'vgg16':    [0.45]*7+[0.78]*5+[0.0],
+
+    #* vgg16-TEST
+    # 'vgg16':    [0.5]*13,
+
+
+
+    #* resnet56-ABCPlus
     # 'resnet56': [0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+
     #             [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+
     #             [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+
     #             [0.0]+[0.0]+[0.0],
-    'resnet56': [0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+
-                [0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+
-                [0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+
-                [0.4]+[0.5]+[0.6],
-    'resnet110':[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+[0.1]+
-                [0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+[0.2]+
-                [0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+[0.3]+
-                [0.4]+[0.5]+[0.6],
-    'googlenet':[0.0]+[0.1]+[0.2]+[0.3]+[0.4]+[0.5]+[0.6]+[0.7]+[0.8]+[0.9],
 
-    'resnet50': [0.2]+[0.8]*10+[0.8]*13+[0.55]*19+[0.45]*10,
-    
+    #* resnet56-HRankPlus
+    # 'resnet56':    [0.]+[0.18]*29,
+    # 'resnet56':    [0.]+[0.15]*2+[0.4]*27,
+    'resnet56':    [0.]+[0.4]*2+[0.5]*9+[0.6]*9+[0.7]*9,
+
+    #* resnet56-TEST
+    # 'resnet56': [0.1]*9 + [0.2]*9 + [0.3]*9 + [0.4]+[0.5]+[0.6],
+
+
+
+    #* resnet110-ABCPlus
+    # 'resnet110':[0.2]+[0.0]+[0.2]+[0.3]+[0.6]+[0.7]+[0.1]+[0.3]+[0.3]+[0.4]+[0.7]+[0.7]+[0.5]+[0.1]+[0.3]+[0.0]+[0.6]+[0.0]+
+    #             [0.2]+[0.5]+[0.0]+[0.6]+[0.7]+[0.5]+[0.7]+[0.7]+[0.3]+[0.4]+[0.0]+[0.3]+[0.1]+[0.5]+[0.0]+[0.1]+[0.0]+[0.7]+
+    #             [0.0]+[0.1]+[0.3]+[0.3]+[0.3]+[0.1]+[0.2]+[0.5]+[0.7]+[0.2]+[0.4]+[0.7]+[0.5]+[0.7]+[0.7]+[0.7]+[0.5]+[0.1]+
+    #             [0.6]+[0.2]+[0.5],
+
+    #* resnet110-HRankPlus
+    # 'resnet110':[0.]+[0.2]*2+[0.3]*18+[0.35]*36,
+    # 'resnet110':[0.]+[0.25]*2+[0.4]*18+[0.55]*36,
+    'resnet110':[0.]+[0.4]*2+[0.5]*18+[0.65]*36,
+
+    #* resnet110-TEST
+    # 'resnet110':[0.1]*18 + [0.2]*18 + [0.3]*18 + [0.4]+[0.5]+[0.6],
+
+
+
+    #* googlenet-ABCPlus
+    # 'googlenet':[0.0]+[0.8]+[0.9]*3+[0.8]*3+[0.9]*2
+
+    #* googlenet-HRankPlus
+    # 'googlenet':[0.3]+[0.6]*2+[0.7]*5+[0.8]*2,
+    'googlenet':[0.4]+[0.85]*2+[0.9]*5+[0.9]*2,
+
+    #* googlenet-TEST
+    # 'googlenet':[0.0]+[0.1]+[0.2]+[0.3]+[0.4]+[0.5]+[0.6]+[0.7]+[0.8]+[0.9],    
 }
 
 
@@ -108,6 +145,7 @@ elif args.arch == 'googlenet':
 
 
 model = model.to(device)
+# model = model.cuda()
 
 
 if len(args.gpus) != 1:
@@ -126,7 +164,10 @@ def train(model, optimizer, trainLoader, args, epoch):
     start_time = time.time()
 
     for batch_idx, (inputs, targets) in enumerate(trainLoader):
+        
         inputs, targets = inputs.to(device), targets.to(device)
+        # inputs, targets = inputs.cuda(), targets.cuda()
+
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = loss_func(outputs, targets)
@@ -162,6 +203,7 @@ def test(model, testLoader):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testLoader):
             inputs, targets = inputs.to(device), targets.to(device)
+            # inputs, targets = inputs.cuda(), targets.cuda()
             outputs = model(inputs)
             loss = loss_func(outputs, targets)
 
@@ -273,7 +315,7 @@ def main():
                 layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
 
                 #* compute layeri_iScore
-                layeri_iScore = torch.mean(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
+                layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
 
 
                 #* setup conv_module's traning-aware attr.
@@ -317,49 +359,48 @@ def main():
             }
             checkpoint.save_model(state, epoch + 1, is_best)
 
-        #* Compute compact_state_dict
-        compact_state_dict = OrderedDict()
-        for name, module in model.named_modules():
-            if isinstance(module, nn.Conv2d):
-                if isinstance(module, FuseConv2d):
-                    compact_state_dict[name+'.weight'] = module.fused_weight
-                    if module.bias is not None:
-                        compact_state_dict[name+'.bias'] = module.fused_bias
-                else:
-                    compact_state_dict[name+'.weight'] = module.weight
-                    if module.bias is not None:
+            if is_best:
+                #* Compute best compact_state_dict
+                compact_state_dict = OrderedDict()
+                for name, module in model.named_modules():
+                    if isinstance(module, nn.Conv2d):
+                        if isinstance(module, FuseConv2d):
+                            compact_state_dict[name+'.weight'] = module.fused_weight
+                            if module.bias is not None:
+                                compact_state_dict[name+'.bias'] = module.fused_bias
+                        else:
+                            compact_state_dict[name+'.weight'] = module.weight
+                            if module.bias is not None:
+                                compact_state_dict[name+'.bias'] = module.bias
+                    if isinstance(module, nn.BatchNorm2d):
+                        compact_state_dict[name+'.weight'] = module.weight
                         compact_state_dict[name+'.bias'] = module.bias
-            if isinstance(module, nn.BatchNorm2d):
-                compact_state_dict[name+'.weight'] = module.weight
-                compact_state_dict[name+'.bias'] = module.bias
-                compact_state_dict[name+'.running_mean'] = module.running_mean
-                compact_state_dict[name+'.running_var'] = module.running_var
-                compact_state_dict[name+'.num_batches_tracked'] = module.num_batches_tracked
-            if isinstance(module, nn.Linear):
-                compact_state_dict[name+'.weight'] = module.weight
-                compact_state_dict[name+'.bias'] = module.bias
+                        compact_state_dict[name+'.running_mean'] = module.running_mean
+                        compact_state_dict[name+'.running_var'] = module.running_var
+                        compact_state_dict[name+'.num_batches_tracked'] = module.num_batches_tracked
+                    if isinstance(module, nn.Linear):
+                        compact_state_dict[name+'.weight'] = module.weight
+                        compact_state_dict[name+'.bias'] = module.bias
+                
+                #* Save best compact_state_dict
+                checkpoint.save_compact_model(compact_state_dict)
+
+        logger.info(f'Best model accuracy: {best_acc:.3f}')
 
 
         #* Test compact model
         compact_model = compact_model.to(device)
+        # compact_model = compact_model.cuda()
+        
+        compact_state_dict = torch.load(f'{args.job_dir}/checkpoint/model_best_compact.pt')
         compact_model.load_state_dict(compact_state_dict)
-
-
-        logger.info(f'Compact model:')
+        logger.info(f'Best Compact model accuracy:')
         compact_test_acc = float(test(compact_model, loader.testLoader))
 
-        #* Save compact_state_dict
-        compact_model_state = {
-            'state_dict': compact_state_dict,
-            'optimizer': optimizer.state_dict(),
-            'scheduler': scheduler.state_dict(),
-            'epoch': epoch + 1,
-            'best_acc': best_acc,
-        }
-        checkpoint.save_model(state, epoch + 1, is_compact=True)
+        
 
 
-        logger.info(f'Best accuracy: {best_acc:.3f}')
+        
 
         #* calculate model size
         # input_image_size = 32
@@ -369,6 +410,7 @@ def main():
         # logger.info(f'FLOPs:{flops}, Params:{params}')
 
         # origin_model = origin_model.to(device)
+        # origin_model = origin_model.cuda()
         # flops, params = profile(origin_model, inputs=(input_image,))
         # logger.info(f'FLOPs:{flops}, Params:{params}')
 
