@@ -1,4 +1,4 @@
-# CVPR21
+# Dynamic Filter Fusion for Training Compact CNNs (CVPR'21)
 
 ## CIFAR-10
 
