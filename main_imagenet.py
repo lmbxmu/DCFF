@@ -164,14 +164,14 @@ else:
 
 
 #* Compute flops, flops, puring rate
-inputs = torch.randn(1, 3, 224, 224)
-compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
-origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
+# inputs = torch.randn(1, 3, 224, 224)
+# compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
+# origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
 
-flops_prate = (origin_flops-compact_flops)/origin_flops
-params_prate = (origin_params-compact_params)/origin_params
-logger.info(f'{args.arch}\'s baseline model: FLOPs={origin_flops/10**6:.2f}M (0.0%), Params={origin_params/10**6:.2f}M (0.0%)')
-logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
+# flops_prate = (origin_flops-compact_flops)/origin_flops
+# params_prate = (origin_params-compact_params)/origin_params
+# logger.info(f'{args.arch}\'s baseline model: FLOPs={origin_flops/10**6:.2f}M (0.0%), Params={origin_params/10**6:.2f}M (0.0%)')
+# logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
 # exit(0)
 
 model = model.to(device)
@@ -440,7 +440,7 @@ def main():
             }
             checkpoint.save_model(state, epoch + 1, is_best)
 
-            if is_best:
+            if is_best or args.debug:
                 #* Compute best compact_state_dict
                 compact_state_dict = OrderedDict()
                 for name, module in model.named_modules():
@@ -465,17 +465,27 @@ def main():
                 
                 #* Save best compact_state_dict
                 checkpoint.save_compact_model(compact_state_dict)
-        
+
         logger.info(f'Best Acc-top1: {float(best_top1_acc):.6f}, Acc-top5: {float(best_top5_acc):.6f}')
 
 
         #* Test compact model
         compact_model = compact_model.to(device)
         compact_state_dict = torch.load(f'{args.job_dir}/checkpoint/model_best_compact.pt')
-        compact_model.load_state_dict(compact_state_dict, strict=False)
-        logger.info(f'Best Compact model accuracy:')
+        compact_model.load_state_dict(compact_state_dict)
         compact_test_acc = test(compact_model, testLoader, topk=(1, 5))
-        print(compact_test_acc)
+        logger.info(f'Best Compact model accuracy Top1: {compact_test_acc[0]:.6f}, Top5: {compact_test_acc[1]:.6f}')
+
+        #* Compute flops, flops, puring rate
+        inputs = torch.randn(1, 3, 224, 224)
+        compact_model = compact_model.cpu()
+        compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
+        origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
+
+        flops_prate = (origin_flops-compact_flops)/origin_flops
+        params_prate = (origin_params-compact_params)/origin_params
+        logger.info(f'{args.arch}\'s baseline model: FLOPs={origin_flops/10**6:.2f}M (0.0%), Params={origin_params/10**6:.2f}M (0.0%)')
+        logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
 
 if __name__ == '__main__':
     main()
