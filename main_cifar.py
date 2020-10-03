@@ -144,6 +144,17 @@ elif args.arch == 'googlenet':
     origin_model = OriginGoogLeNet()
 
 
+#* Compute flops, flops, puring rate
+inputs = torch.randn(1, 3, 32, 32)
+compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
+origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
+
+flops_prate = (origin_flops-compact_flops)/origin_flops
+params_prate = (origin_params-compact_params)/origin_params
+logger.info(f'{args.arch}\'s baseline model: FLOPs={origin_flops/10**6:.2f}M (0.0%), Params={origin_params/10**6:.2f}M (0.0%)')
+logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
+# exit(0)
+
 model = model.to(device)
 # model = model.cuda()
 
@@ -222,8 +233,7 @@ def test(model, testLoader):
 def main():
     global model, compact_model, origin_model
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, 
-                        momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=args.lr_decay_step, gamma=0.1)
 
@@ -239,7 +249,6 @@ def main():
         if len(args.gpus) == 1:  # load model when use single gpu
             model.load_state_dict(state_dict)
         else:                    # load model when use multi-gpus
-            # from collections import OrderedDict
             new_state_dict = OrderedDict()
             for k, v in state_dict.items():
                 if 'module' not in k:
@@ -312,7 +321,7 @@ def main():
                 layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
 
                 #* compute layeri_KL
-                layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
+                layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
 
                 #* compute layeri_iScore
                 layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
@@ -390,29 +399,13 @@ def main():
 
         #* Test compact model
         compact_model = compact_model.to(device)
-        # compact_model = compact_model.cuda()
         
         compact_state_dict = torch.load(f'{args.job_dir}/checkpoint/model_best_compact.pt')
-        compact_model.load_state_dict(compact_state_dict)
+        compact_model.load_state_dict(compact_state_dict, strict=False)
         logger.info(f'Best Compact model accuracy:')
         compact_test_acc = float(test(compact_model, loader.testLoader))
 
-        
 
-
-        
-
-        #* calculate model size
-        # input_image_size = 32
-        # input_image = torch.randn(1, 3, input_image_size, input_image_size).cuda()
-
-        # flops, params = profile(compact_model, inputs=(input_image,))
-        # logger.info(f'FLOPs:{flops}, Params:{params}')
-
-        # origin_model = origin_model.to(device)
-        # origin_model = origin_model.cuda()
-        # flops, params = profile(origin_model, inputs=(input_image,))
-        # logger.info(f'FLOPs:{flops}, Params:{params}')
 
 if __name__ == '__main__':
     main()
