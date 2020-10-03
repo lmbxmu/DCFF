@@ -282,3 +282,25 @@ t_expression: 1 - epoch / args.num_epochs
 | 1               |            |            |            |             |
 
 <br>
+
+
+
+### mobilenetv2
+
+#### epoch-90
+
+```
+
+```
+
+
+
+| run-n           | top1-acc/% | top5-acc/% | FLOPs (PR) | Params (PR) |
+| --------------- | ---------- | ---------- | ---------- | ----------- |
+| **mobilenetv1** |            |            |            |             |
+|                 |            |            |            |             |
+| 0               |            |            |            |             |
+| 1               |            |            |            |             |
+
+<br>
+
