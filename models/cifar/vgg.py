@@ -28,17 +28,17 @@ class Fused_VGG(nn.Module):
     def _make_layers(self, cfg, cprate):
         layers = []
         in_channels = 3
-        conv_layerid = 0
+        cur_fconvid = 0
         for layeri, x in enumerate(cfg):
             if x == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
-                cout = int(x*(1-cprate[conv_layerid]))
+                cout = int(x*(1-cprate[cur_fconvid]))
                 layers += [FuseConv2d(in_channels, x, kernel_size=3, padding=1),
                            nn.BatchNorm2d(cout),
                            nn.ReLU(inplace=True)]
                 in_channels = cout
-                conv_layerid += 1
+                cur_fconvid += 1
 
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
 
@@ -65,18 +65,18 @@ class Compact_VGG(nn.Module):
     def _make_layers(self, cfg, cprate):
         layers = []
         in_channels = 3
-        conv_layerid = 0
+        cur_fconvid = 0
         for layeri, x in enumerate(cfg):
             if x == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
             else:
-                cout = int(x*(1-cprate[conv_layerid]))
+                cout = int(x*(1-cprate[cur_fconvid]))
                 # layers += [FuseConv2d(in_channels, x, kernel_size=3, padding=1),
                 layers += [nn.Conv2d(in_channels, cout, kernel_size=3, padding=1),
                            nn.BatchNorm2d(cout),
                            nn.ReLU(inplace=True)]
                 in_channels = cout
-                conv_layerid += 1
+                cur_fconvid += 1
 
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
 
