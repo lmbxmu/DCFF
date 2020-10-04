@@ -31,12 +31,12 @@ def fused_conv3x3(in_planes, out_planes, stride=1):
 class FusedBasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, cprate, cur_convid, stride=1):
+    def __init__(self, in_planes, planes, cprate, cur_fconvid, stride=1):
         super(FusedBasicBlock, self).__init__()
 
         #*
-        real_in_planes = int(in_planes*(1-cprate[cur_convid-1]))
-        real_planes = int(planes*(1-cprate[cur_convid]))
+        real_in_planes = int(in_planes*(1-cprate[cur_fconvid-1]))
+        real_planes = int(planes*(1-cprate[cur_fconvid]))
 
         last_cout = real_in_planes
         cur_cout = real_planes
@@ -45,18 +45,18 @@ class FusedBasicBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(cur_cout)
         self.relu = nn.ReLU(inplace=True)
 
-        cur_convid = cur_convid + 1
+        cur_fconvid = cur_fconvid + 1
 
         
-        last_cout = int(planes*(1-cprate[cur_convid-1]))
-        cur_cout = int(planes*(1-cprate[cur_convid]))
+        last_cout = int(planes*(1-cprate[cur_fconvid-1]))
+        cur_cout = int(planes*(1-cprate[cur_fconvid]))
 
         self.conv2 = fused_conv3x3(last_cout, planes)
         self.bn2 = nn.BatchNorm2d(cur_cout)
 
         self.shortcut = nn.Sequential()
 
-        cur_cout = int(planes*(1-cprate[cur_convid]))
+        cur_cout = int(planes*(1-cprate[cur_fconvid]))
 
         
         if stride != 1 or real_in_planes != cur_cout:
@@ -71,7 +71,6 @@ class FusedBasicBlock(nn.Module):
 
     def forward(self, x):
         out = self.conv1(x)
-
         out = self.bn1(out)
         out = self.relu(out)
 
@@ -89,16 +88,16 @@ class FusedResNet(nn.Module):
         super(FusedResNet, self).__init__()
         #*
         self.cprate = cprate
-        self.cur_convid = 0
+        self.cur_fconvid = 0
 
         self.in_planes = 16
 
         #*
         self.conv1 = fused_conv3x3(3, 16)
-        self.bn1 = nn.BatchNorm2d(int(16*(1-self.cprate[self.cur_convid])))
+        self.bn1 = nn.BatchNorm2d(int(16*(1-self.cprate[self.cur_fconvid])))
         self.relu = nn.ReLU(inplace=True)
         #*
-        self.cur_convid = self.cur_convid +1
+        self.cur_fconvid = self.cur_fconvid +1
 
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
@@ -116,10 +115,10 @@ class FusedResNet(nn.Module):
         layers = []
         for stride in strides:
             layers.append(block(in_planes=self.in_planes, planes=planes, 
-                                cprate = self.cprate, cur_convid=self.cur_convid, stride=stride))
+                                cprate = self.cprate, cur_fconvid=self.cur_fconvid, stride=stride))
             self.in_planes = planes * block.expansion
             #*
-            self.cur_convid = self.cur_convid + 2
+            self.cur_fconvid = self.cur_fconvid + 2
         return nn.Sequential(*layers)
 
     def forward(self, x):
@@ -157,12 +156,12 @@ def compact_conv3x3(in_planes, out_planes, stride=1):
 class CompactBasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, cprate, cur_convid, stride=1):
+    def __init__(self, in_planes, planes, cprate, cur_fconvid, stride=1):
         super(CompactBasicBlock, self).__init__()
 
         #*
-        real_in_planes = int(in_planes*(1-cprate[cur_convid-1]))
-        real_planes = int(planes*(1-cprate[cur_convid]))
+        real_in_planes = int(in_planes*(1-cprate[cur_fconvid-1]))
+        real_planes = int(planes*(1-cprate[cur_fconvid]))
 
         last_cout = real_in_planes
         cur_cout = real_planes
@@ -172,11 +171,11 @@ class CompactBasicBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(cur_cout)
         self.relu = nn.ReLU(inplace=True)
 
-        cur_convid = cur_convid + 1
+        cur_fconvid = cur_fconvid + 1
 
         
-        last_cout = int(planes*(1-cprate[cur_convid-1]))
-        cur_cout = int(planes*(1-cprate[cur_convid]))
+        last_cout = int(planes*(1-cprate[cur_fconvid-1]))
+        cur_cout = int(planes*(1-cprate[cur_fconvid]))
 
         # self.conv2 = compact_conv3x3(last_cout, planes)
         self.conv2 = compact_conv3x3(last_cout, cur_cout)
@@ -184,7 +183,7 @@ class CompactBasicBlock(nn.Module):
 
         self.shortcut = nn.Sequential()
 
-        cur_cout = int(planes*(1-cprate[cur_convid]))
+        cur_cout = int(planes*(1-cprate[cur_fconvid]))
 
         
         if stride != 1 or real_in_planes != cur_cout:
@@ -216,17 +215,17 @@ class CompactResNet(nn.Module):
         super(CompactResNet, self).__init__()
         #*
         self.cprate = cprate
-        self.cur_convid = 0
+        self.cur_fconvid = 0
 
         self.in_planes = 16
 
         #*
-        cur_cout = int(16*(1-self.cprate[self.cur_convid]))
+        cur_cout = int(16*(1-self.cprate[self.cur_fconvid]))
         self.conv1 = compact_conv3x3(3, cur_cout)
         self.bn1 = nn.BatchNorm2d(cur_cout)
         self.relu = nn.ReLU(inplace=True)
         #*
-        self.cur_convid = self.cur_convid +1
+        self.cur_fconvid = self.cur_fconvid +1
 
         self.layer1 = self._make_layer(block, 16, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 32, num_blocks[1], stride=2)
@@ -244,10 +243,10 @@ class CompactResNet(nn.Module):
         layers = []
         for stride in strides:
             layers.append(block(in_planes=self.in_planes, planes=planes, 
-                                cprate = self.cprate, cur_convid=self.cur_convid, stride=stride))
+                                cprate = self.cprate, cur_fconvid=self.cur_fconvid, stride=stride))
             self.in_planes = planes * block.expansion
             #*
-            self.cur_convid = self.cur_convid + 2
+            self.cur_fconvid = self.cur_fconvid + 2
         return nn.Sequential(*layers)
 
     def forward(self, x):
@@ -366,13 +365,14 @@ def origin_resnet110():
 
 
 
-# cprate = [0.0]*55
+
 # def test():
+#     cprate = [0.0]*30
 #     # model = compact_resnet56(cprate)
-#     model = resnet56()
-#     # print(model)
-#     x = torch.randn(2,3,32,32)
-#     y = model(x)
-#     print(y.size())
+#     model = origin_resnet56()
+#     print(model)
+#     # x = torch.randn(2,3,32,32)
+#     # y = model(x)
+#     # print(y.size())
 
 # test()
