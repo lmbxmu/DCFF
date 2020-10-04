@@ -8,60 +8,87 @@ from .fuse_modules import FuseConv2d
 # from fuse_modules import FuseConv2d
 
 #*====================================================
-#* fused model
+#* Fused model
 class FusedInception(nn.Module):
-    def __init__(self, in_planes, n1x1, n3x3red, n3x3, n5x5red, n5x5, pool_planes, cprate, cur_stageid):
+    def __init__(self, in_planes, n1x1, n3x3red, n3x3, n5x5red, n5x5, pool_planes, flayer_cprate, cur_fconvid):
         super(FusedInception, self).__init__()
-        # 1x1 conv branch
+        #* 1x1 conv branch
+        cur_fconvid += 0
+        last_cout = in_planes
+        cur_cout = int(n1x1*(1-flayer_cprate[cur_fconvid]))
+
         self.b1 = nn.Sequential(
-            nn.Conv2d(in_planes, n1x1, kernel_size=1),
-            nn.BatchNorm2d(n1x1),
+            # nn.Conv2d(in_planes, n1x1, kernel_size=1),
+            FuseConv2d(last_cout, n1x1, kernel_size=1),
+            nn.BatchNorm2d(cur_cout),
             nn.ReLU(True),
         )
 
-        # 1x1 conv -> 3x3 conv branch
-        #*
-        cur_cout = int(n3x3*(1-cprate[cur_stageid]))
+        #* 1x1 conv -> 3x3 conv branch
+        cur_fconvid += 1
+        last_cout0 = in_planes
+        cur_cout0 = int(n3x3red*(1-flayer_cprate[cur_fconvid]))
+
+        cur_fconvid += 1
+        last_cout1 = cur_cout0
+        cur_cout1 = int(n3x3*(1-flayer_cprate[cur_fconvid]))
+
         self.b2 = nn.Sequential(
-            nn.Conv2d(in_planes, n3x3red, kernel_size=1),
-            nn.BatchNorm2d(n3x3red),
+            # nn.Conv2d(in_planes, n3x3red, kernel_size=1),
+            FuseConv2d(last_cout0, n3x3red, kernel_size=1),
+            nn.BatchNorm2d(cur_cout0),
             nn.ReLU(True),
             # nn.Conv2d(n3x3red, n3x3, kernel_size=3, padding=1),
-            FuseConv2d(n3x3red, n3x3, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            FuseConv2d(last_cout1, n3x3, kernel_size=3, padding=1),
+            nn.BatchNorm2d(cur_cout1),
             nn.ReLU(True),
         )
+        cur_cout = cur_cout1
 
-        # 1x1 conv -> 5x5 conv branch
-        #*
-        cur_cout = int(n5x5*(1-cprate[cur_stageid]))
+        #* 1x1 conv -> 5x5 conv branch
+        cur_fconvid += 1
+        last_cout0 = in_planes
+        cur_cout0 = int(n5x5red*(1-flayer_cprate[cur_fconvid]))
+
+        cur_fconvid += 1
+        last_cout1 = cur_cout0
+        cur_cout1 = int(n5x5*(1-flayer_cprate[cur_fconvid]))
+
+        cur_fconvid += 1
+        last_cout2 = cur_cout1
+        cur_cout2 = int(n5x5*(1-flayer_cprate[cur_fconvid]))
+
         self.b3 = nn.Sequential(
-            nn.Conv2d(in_planes, n5x5red, kernel_size=1),
-            nn.BatchNorm2d(n5x5red),
+            # nn.Conv2d(in_planes, n5x5red, kernel_size=1),
+            FuseConv2d(last_cout0, n5x5red, kernel_size=1),
+            nn.BatchNorm2d(cur_cout0),
             nn.ReLU(True),
             # nn.Conv2d(n5x5red, n5x5, kernel_size=3, padding=1),
-            FuseConv2d(n5x5red, n5x5, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            FuseConv2d(last_cout1, n5x5, kernel_size=3, padding=1),
+            nn.BatchNorm2d(cur_cout1),
             nn.ReLU(True),
             # nn.Conv2d(n5x5, n5x5, kernel_size=3, padding=1),
-            FuseConv2d(cur_cout, n5x5, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            FuseConv2d(last_cout2, n5x5, kernel_size=3, padding=1),
+            nn.BatchNorm2d(cur_cout2),
             nn.ReLU(True),
         )
+        cur_cout = cur_cout2
 
         # 3x3 pool -> 1x1 conv branch
+        cur_fconvid += 1
+        last_cout = in_planes
+        cur_cout = int(pool_planes*(1-flayer_cprate[cur_fconvid]))
+
         self.b4 = nn.Sequential(
             nn.MaxPool2d(3, stride=1, padding=1),
-            nn.Conv2d(in_planes, pool_planes, kernel_size=1),
-            nn.BatchNorm2d(pool_planes),
+            # nn.Conv2d(in_planes, pool_planes, kernel_size=1),
+            FuseConv2d(last_cout, pool_planes, kernel_size=1),
+            nn.BatchNorm2d(cur_cout),
             nn.ReLU(True),
         )
 
     def forward(self, x):
         y1 = self.b1(x)
-        # print(x.shape)
-        # print(y1.shape)
-        # exit(0)
         y2 = self.b2(x)
         y3 = self.b3(x)
         y4 = self.b4(x)
@@ -69,94 +96,114 @@ class FusedInception(nn.Module):
 
 
 class FusedGoogLeNet(nn.Module):
-    def __init__(self, cprate):
+    def __init__(self, flayer_cprate):
         super(FusedGoogLeNet, self).__init__()
         #*
-        print(cprate)
-        # exit(0)
-        cur_stageid = 0
-        cur_cout = int(192*(1-cprate[cur_stageid]))
+        cur_fconvid = 0
+        last_stage_cout = 3
+        cur_stage_cout = int(192*(1-flayer_cprate[cur_fconvid]))
         self.pre_layers = nn.Sequential(
             # nn.Conv2d(3, 192, kernel_size=3, padding=1),
-            FuseConv2d(3, 192, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            FuseConv2d(last_stage_cout, 192, kernel_size=3, padding=1),
+            nn.BatchNorm2d(cur_stage_cout),
             nn.ReLU(True),
         )
 
         #*
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 64 + int(128*cur_hold_rate) + int(32*cur_hold_rate) + 32
-        print(cprate, cur_stageid)
-        # exit(0)
-        self.a3 = FusedInception(last_cout,     64,     96, 128,    16,  32,     32,    cprate, cur_stageid)
+        cur_fconvid += 1
+        last_stage_cout = cur_stage_cout
+        b1_cout = int( 64*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(128*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 32*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 32*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.a3 = FusedInception(last_stage_cout,     64,     96, 128,    16,  32,     32,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 128 + int(192*cur_hold_rate) + int(96*cur_hold_rate) + 64
-        self.b3 = FusedInception(last_cout,    128,    128, 192,    32,  96,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(128*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(192*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 96*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        
+        self.b3 = FusedInception(last_stage_cout,    128,    128, 192,    32,  96,     64,    flayer_cprate, cur_fconvid)
 
 
         self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
 
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 192 + int(208*cur_hold_rate) + int(48*cur_hold_rate) + 64
-        self.a4 = FusedInception(last_cout,    192,     96, 208,    16,  48,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(192*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(208*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 48*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.a4 = FusedInception(last_stage_cout,    192,     96, 208,    16,  48,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 160 + int(224*cur_hold_rate) + int(64*cur_hold_rate) + 64
-        self.b4 = FusedInception(last_cout,    160,    112, 224,    24,  64,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(160*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(224*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 64*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.b4 = FusedInception(last_stage_cout,    160,    112, 224,    24,  64,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 128 + int(256*cur_hold_rate) + int(64*cur_hold_rate) + 64
-        self.c4 = FusedInception(last_cout,    128,    128, 256,    24,  64,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(128*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(256*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 64*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.c4 = FusedInception(last_stage_cout,    128,    128, 256,    24,  64,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 112 + int(288*cur_hold_rate) + int(64*cur_hold_rate) + 64
-        self.d4 = FusedInception(last_cout,    112,    144, 288,    32,  64,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(112*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(288*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 64*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.d4 = FusedInception(last_stage_cout,    112,    144, 288,    32,  64,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 256 + int(320*cur_hold_rate) + int(128*cur_hold_rate) + 128
-        self.e4 = FusedInception(last_cout,    256,    160, 320,    32, 128,    128,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(256*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(320*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int(128*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int(128*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.e4 = FusedInception(last_stage_cout,    256,    160, 320,    32, 128,    128,    flayer_cprate, cur_fconvid)
 
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 256 + int(320*cur_hold_rate) + int(128*cur_hold_rate) + 128
-        self.a5 = FusedInception(last_cout,    256,    160, 320,    32, 128,    128,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(256*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(320*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int(128*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int(128*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.a5 = FusedInception(last_stage_cout,    256,    160, 320,    32, 128,    128,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 384 + int(384*cur_hold_rate) + int(128*cur_hold_rate) + 128
-        # print(cur_stageid, cur_hold_rate)
-        # exit(0)
-        self.b5 = FusedInception(last_cout,    384,    192, 384,    48, 128,    128,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(384*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(384*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int(128*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int(128*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.b5 = FusedInception(last_stage_cout,    384,    192, 384,    48, 128,    128,    flayer_cprate, cur_fconvid)
 
 
         self.avgpool = nn.AvgPool2d(8, stride=1)
 
-        cur_stageid += 1
-        last_cout = cur_cout
-        self.linear = nn.Linear(last_cout, 10)
+        last_stage_cout = cur_stage_cout
+        self.linear = nn.Linear(last_stage_cout, 10)
 
     def forward(self, x):
-        # print(x.shape)
-        # exit(0)
         out = self.pre_layers(x)
 
         # 192 x 32 x 32
@@ -196,52 +243,82 @@ class FusedGoogLeNet(nn.Module):
 
 
 #*====================================================
-#* fused model
+#* Compact model
 class CompactInception(nn.Module):
-    def __init__(self, in_planes, n1x1, n3x3red, n3x3, n5x5red, n5x5, pool_planes, cprate, cur_stageid):
+    def __init__(self, in_planes, n1x1, n3x3red, n3x3, n5x5red, n5x5, pool_planes, flayer_cprate, cur_fconvid):
         super(CompactInception, self).__init__()
-        # 1x1 conv branch
+        #* 1x1 conv branch
+        cur_fconvid += 0
+        last_cout = in_planes
+        cur_cout = int(n1x1*(1-flayer_cprate[cur_fconvid]))
+
         self.b1 = nn.Sequential(
-            nn.Conv2d(in_planes, n1x1, kernel_size=1),
-            nn.BatchNorm2d(n1x1),
+            nn.Conv2d(in_planes, cur_cout, kernel_size=1),
+            # FuseConv2d(last_cout, n1x1, kernel_size=1),
+            nn.BatchNorm2d(cur_cout),
             nn.ReLU(True),
         )
 
-        # 1x1 conv -> 3x3 conv branch
-        #*
-        cur_cout = int(n3x3*(1-cprate[cur_stageid]))
+        #* 1x1 conv -> 3x3 conv branch
+        cur_fconvid += 1
+        last_cout0 = in_planes
+        cur_cout0 = int(n3x3red*(1-flayer_cprate[cur_fconvid]))
+
+        cur_fconvid += 1
+        last_cout1 = cur_cout0
+        cur_cout1 = int(n3x3*(1-flayer_cprate[cur_fconvid]))
+
         self.b2 = nn.Sequential(
-            nn.Conv2d(in_planes, n3x3red, kernel_size=1),
-            nn.BatchNorm2d(n3x3red),
+            nn.Conv2d(in_planes, cur_cout0, kernel_size=1),
+            # FuseConv2d(last_cout0, n3x3red, kernel_size=1),
+            nn.BatchNorm2d(cur_cout0),
             nn.ReLU(True),
-            nn.Conv2d(n3x3red, cur_cout, kernel_size=3, padding=1),
-            # FuseConv2d(n3x3red, n3x3, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            nn.Conv2d(cur_cout0, cur_cout1, kernel_size=3, padding=1),
+            # FuseConv2d(last_cout1, n3x3, kernel_size=3, padding=1),
+            nn.BatchNorm2d(cur_cout1),
             nn.ReLU(True),
         )
+        cur_cout = cur_cout1
 
-        # 1x1 conv -> 5x5 conv branch
-        #*
-        cur_cout = int(n5x5*(1-cprate[cur_stageid]))
+        #* 1x1 conv -> 5x5 conv branch
+        cur_fconvid += 1
+        last_cout0 = in_planes
+        cur_cout0 = int(n5x5red*(1-flayer_cprate[cur_fconvid]))
+
+        cur_fconvid += 1
+        last_cout1 = cur_cout0
+        cur_cout1 = int(n5x5*(1-flayer_cprate[cur_fconvid]))
+
+        cur_fconvid += 1
+        last_cout2 = cur_cout1
+        cur_cout2 = int(n5x5*(1-flayer_cprate[cur_fconvid]))
+
         self.b3 = nn.Sequential(
-            nn.Conv2d(in_planes, n5x5red, kernel_size=1),
-            nn.BatchNorm2d(n5x5red),
+            nn.Conv2d(in_planes, cur_cout0, kernel_size=1),
+            # FuseConv2d(last_cout0, n5x5red, kernel_size=1),
+            nn.BatchNorm2d(cur_cout0),
             nn.ReLU(True),
-            nn.Conv2d(n5x5red, cur_cout, kernel_size=3, padding=1),
-            # FuseConv2d(n5x5red, n5x5, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            nn.Conv2d(cur_cout0, cur_cout1, kernel_size=3, padding=1),
+            # FuseConv2d(last_cout1, n5x5, kernel_size=3, padding=1),
+            nn.BatchNorm2d(cur_cout1),
             nn.ReLU(True),
-            nn.Conv2d(cur_cout, cur_cout, kernel_size=3, padding=1),
-            # FuseConv2d(cur_cout, n5x5, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            nn.Conv2d(cur_cout1, cur_cout2, kernel_size=3, padding=1),
+            # FuseConv2d(last_cout2, n5x5, kernel_size=3, padding=1),
+            nn.BatchNorm2d(cur_cout2),
             nn.ReLU(True),
         )
+        cur_cout = cur_cout2
 
         # 3x3 pool -> 1x1 conv branch
+        cur_fconvid += 1
+        last_cout = in_planes
+        cur_cout = int(pool_planes*(1-flayer_cprate[cur_fconvid]))
+
         self.b4 = nn.Sequential(
             nn.MaxPool2d(3, stride=1, padding=1),
-            nn.Conv2d(in_planes, pool_planes, kernel_size=1),
-            nn.BatchNorm2d(pool_planes),
+            nn.Conv2d(last_cout, cur_cout, kernel_size=1),
+            # FuseConv2d(last_cout, pool_planes, kernel_size=1),
+            nn.BatchNorm2d(cur_cout),
             nn.ReLU(True),
         )
 
@@ -254,85 +331,112 @@ class CompactInception(nn.Module):
 
 
 class CompactGoogLeNet(nn.Module):
-    def __init__(self, cprate):
+    def __init__(self, flayer_cprate):
         super(CompactGoogLeNet, self).__init__()
         #*
-        cur_stageid = 0
-        cur_cout = int(192*(1-cprate[cur_stageid]))
+        cur_fconvid = 0
+        last_stage_cout = 3
+        cur_stage_cout = int(192*(1-flayer_cprate[cur_fconvid]))
         self.pre_layers = nn.Sequential(
-            nn.Conv2d(3, cur_cout, kernel_size=3, padding=1),
+            nn.Conv2d(last_stage_cout, cur_stage_cout, kernel_size=3, padding=1),
             # FuseConv2d(3, 192, kernel_size=3, padding=1),
-            nn.BatchNorm2d(cur_cout),
+            nn.BatchNorm2d(cur_stage_cout),
             nn.ReLU(True),
         )
 
         #*
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 64 + int(128*cur_hold_rate) + int(32*cur_hold_rate) + 32
-        self.a3 = CompactInception(last_cout,     64,     96, 128,    16,  32,     32,    cprate, cur_stageid)
+        cur_fconvid += 1
+        last_stage_cout = cur_stage_cout
+        b1_cout = int( 64*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(128*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 32*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 32*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.a3 = CompactInception(last_stage_cout,     64,     96, 128,    16,  32,     32,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 128 + int(192*cur_hold_rate) + int(96*cur_hold_rate) + 64
-        self.b3 = CompactInception(last_cout,    128,    128, 192,    32,  96,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(128*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(192*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 96*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        
+        self.b3 = CompactInception(last_stage_cout,    128,    128, 192,    32,  96,     64,    flayer_cprate, cur_fconvid)
 
 
         self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
 
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 192 + int(208*cur_hold_rate) + int(48*cur_hold_rate) + 64
-        self.a4 = CompactInception(last_cout,    192,     96, 208,    16,  48,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(192*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(208*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 48*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.a4 = CompactInception(last_stage_cout,    192,     96, 208,    16,  48,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 160 + int(224*cur_hold_rate) + int(64*cur_hold_rate) + 64
-        self.b4 = CompactInception(last_cout,    160,    112, 224,    24,  64,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(160*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(224*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 64*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.b4 = CompactInception(last_stage_cout,    160,    112, 224,    24,  64,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 128 + int(256*cur_hold_rate) + int(64*cur_hold_rate) + 64
-        self.c4 = CompactInception(last_cout,    128,    128, 256,    24,  64,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(128*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(256*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 64*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.c4 = CompactInception(last_stage_cout,    128,    128, 256,    24,  64,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 112 + int(288*cur_hold_rate) + int(64*cur_hold_rate) + 64
-        self.d4 = CompactInception(last_cout,    112,    144, 288,    32,  64,     64,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(112*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(288*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int( 64*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int( 64*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.d4 = CompactInception(last_stage_cout,    112,    144, 288,    32,  64,     64,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 256 + int(320*cur_hold_rate) + int(128*cur_hold_rate) + 128
-        self.e4 = CompactInception(last_cout,    256,    160, 320,    32, 128,    128,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(256*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(320*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int(128*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int(128*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.e4 = CompactInception(last_stage_cout,    256,    160, 320,    32, 128,    128,    flayer_cprate, cur_fconvid)
 
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 256 + int(320*cur_hold_rate) + int(128*cur_hold_rate) + 128
-        self.a5 = CompactInception(last_cout,    256,    160, 320,    32, 128,    128,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(256*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(320*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int(128*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int(128*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.a5 = CompactInception(last_stage_cout,    256,    160, 320,    32, 128,    128,    flayer_cprate, cur_fconvid)
 
-        cur_stageid += 1
-        cur_hold_rate = (1-cprate[cur_stageid])
-        last_cout = cur_cout
-        cur_cout = 384 + int(384*cur_hold_rate) + int(128*cur_hold_rate) + 128
-
-        self.b5 = CompactInception(last_cout,    384,    192, 384,    48, 128,    128,    cprate, cur_stageid)
+        cur_fconvid += 7
+        last_stage_cout = cur_stage_cout
+        b1_cout = int(384*(1-flayer_cprate[cur_fconvid]))
+        b2_cout = int(384*(1-flayer_cprate[cur_fconvid+2]))
+        b3_cout = int(128*(1-flayer_cprate[cur_fconvid+5]))
+        b4_cout = int(128*(1-flayer_cprate[cur_fconvid+6]))
+        cur_stage_cout = b1_cout + b2_cout + b3_cout + b4_cout
+        self.b5 = CompactInception(last_stage_cout,    384,    192, 384,    48, 128,    128,    flayer_cprate, cur_fconvid)
 
 
         self.avgpool = nn.AvgPool2d(8, stride=1)
 
-        cur_stageid += 1
-        last_cout = cur_cout
-        self.linear = nn.Linear(last_cout, 10)
+        last_stage_cout = cur_stage_cout
+        self.linear = nn.Linear(last_stage_cout, 10)
 
     def forward(self, x):
         out = self.pre_layers(x)
@@ -368,7 +472,6 @@ class CompactGoogLeNet(nn.Module):
         out = self.linear(out)
 
         return out
-
 
 
 
@@ -470,8 +573,8 @@ class OriginGoogLeNet(nn.Module):
 
 
 def test():
-    cprate = [0.5]*10
-    model = CompactGoogLeNet(cprate)
+    flayer_cprate = [0.9]*64
+    model = CompactGoogLeNet(flayer_cprate)
     # model = OriginGoogLeNet()
     print(model)
 
