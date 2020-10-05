@@ -371,18 +371,13 @@ def main():
                 #* Compute layeri_negaEudist
                 # layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
                 layeri_negaEudist = torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
-                torch.set_printoptions(precision=4, threshold=1e999)
-                logger_printP.info(f'\nlayeri_negaEudist:\n{layeri_negaEudist}\n')
-                torch.set_printoptions(profile='default')
+                # logger_printP.info(f'\nlayeri_negaEudist:\n{layeri_negaEudist}\n')
                 logger_printP.info(f'\ntorch.mean(layeri_negaEudist, dim=1):\n{torch.mean(layeri_negaEudist, dim=1)}\n')
                 logger_printP.info(f'\ntorch.max(layeri_negaEudist, dim=1):\n{torch.max(layeri_negaEudist, dim=1)}\n\n')
 
                 _, idx = torch.max(layeri_negaEudist, dim=1)
 
                 if torch.unique(idx).shape != idx.shape:
-                    # torch.set_printoptions(precision=8, threshold=1e999)
-                    # logger_printP.info(f'\nlayeri_param:\n{layeri_param}\n\n')
-                    # torch.set_printoptions(profile='default')
                     logger_printP.info(f'\ntorch.unique(idx).shape:\n{torch.unique(idx).shape}, idx.shape:{idx.shape}')
                 
                 #* Compute layeri_softmaxP
@@ -391,7 +386,7 @@ def main():
                 logger_printP.info(f'\ntorch.max(layeri_softmaxP, dim=1):\n{torch.max(layeri_softmaxP, dim=1)}\n\n')
                 
                 #* Compute layeri_KL
-                layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
+                layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/(layeri_softmaxP+10**-7)).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
                 logger_printP.info(f'\ntorch.max(layeri_KL, dim=1):\n{torch.max(layeri_KL, dim=1)}\n\n')
 
                 #* Compute layeri_iScore
