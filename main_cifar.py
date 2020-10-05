@@ -16,6 +16,7 @@ from utils.options import args
 import numpy as np
 from collections import OrderedDict
 from thop import profile
+from scipy.spatial.distance import cdist
 import pdb
 
 
@@ -263,6 +264,28 @@ def test(model, testLoader):
     return accuracy.avg
 
 
+def pairwise_distances(x, y=None):
+    '''
+    Input: x is a Nxd matrix
+           y is an optional Mxd matirx
+    Output: dist is a NxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
+            if y is not given then use 'y=x'.
+    i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
+    '''
+    x_norm = (x**2).sum(1).view(-1, 1)
+    if y is not None:
+        y_t = torch.transpose(y, 0, 1)
+        y_norm = (y**2).sum(1).view(1, -1)
+    else:
+        y_t = torch.transpose(x, 0, 1)
+        y_norm = x_norm.view(1, -1)
+    
+    dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
+    # Ensure diagonal is zero if x=y
+    # if y is None:
+    #     dist = dist - torch.diag(dist.diag)
+    return torch.clamp(dist, 0.0, np.inf)
+
 # main function
 def main():
     global model, compact_model, origin_model
@@ -346,14 +369,17 @@ def main():
                 layeri_param = torch.reshape(param.detach(), (param.shape[0], -1))      #* layeri_param.shape=[cout, cin, k, k], layeri_param[j] means filterj's weight.
 
                 #* Compute layeri_negaEudist
-                layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
+                # layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
+                layeri_negaEudist = -torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
+                # exit()
+
                 _, idx = torch.max(layeri_negaEudist, dim=1)
 
                 if torch.unique(idx).shape != idx.shape:
+                    # torch.set_printoptions(precision=8, threshold=1e999)
                     logger_printP.info(f'layeri_param:{layeri_param}\n\n')
-                    torch.set_printoptions(precision=8, threshold=1e9)
                     logger_printP.info(f'layeri_negaEudist: {torch.max(layeri_negaEudist, dim=1)}\n\n')
-                    torch.set_printoptions(profile='default')
+                    # torch.set_printoptions(profile='default')
                 
                 #* Compute layeri_softmaxP
                 softmax = nn.Softmax(dim=1)
