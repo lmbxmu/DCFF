@@ -16,13 +16,15 @@ from utils.options import args
 import numpy as np
 from collections import OrderedDict
 from thop import profile
+import pdb
 
 
 
 # Init
 device = torch.device(f'cuda:{args.gpus[0]}') if torch.cuda.is_available() else 'cpu'
 checkpoint = utils.CheckPoint(args)
-logger = utils.GetLogger(os.path.join(args.job_dir + '/logger.log'))
+logger = utils.GetLogger('DFF', os.path.join(args.job_dir + '/logger.log'))
+logger_printP = utils.GetLogger('printP', os.path.join(args.job_dir + '/softmaxP.log'))
 loss_func = nn.CrossEntropyLoss()
 
 
@@ -334,6 +336,8 @@ def main():
             #* Compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
             start = time.time()
             for layerid, module in enumerate(fused_conv_modules):
+                logger_printP.info(f'==================== Epoch:{epoch}, layer {layerid} ====================\n\n')
+                
                 print(layerid)
 
                 param = module.weight
@@ -343,19 +347,32 @@ def main():
 
                 #* Compute layeri_negaEudist
                 layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
+                _, idx = torch.max(layeri_negaEudist, dim=1)
 
+                if torch.unique(idx).shape != idx.shape:
+                    logger_printP.info(f'layeri_param:{layeri_param}\n\n')
+                    torch.set_printoptions(precision=8, threshold=1e9)
+                    logger_printP.info(f'layeri_negaEudist: {torch.max(layeri_negaEudist, dim=1)}\n\n')
+                    torch.set_printoptions(profile='default')
+                
                 #* Compute layeri_softmaxP
                 softmax = nn.Softmax(dim=1)
                 layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
-
+                logger_printP.info(f'layeri_softmaxP: {torch.max(layeri_softmaxP, dim=1)}\n\n')
+                
                 #* Compute layeri_KL
                 layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
+                logger_printP.info(f'layeri_KL: {torch.max(layeri_KL, dim=1)}\n\n')
 
                 #* Compute layeri_iScore
                 layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
                 
+
                 #* setup conv_module.layeri_topm_filters_id
                 _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
+
+                ###*
+                logger_printP.info(f'layeri_iScore: {layeri_iScore[topm_ids]}\n\n')
 
                 ##* setup conv_module.layeri_softmaxP
                 module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
@@ -365,11 +382,9 @@ def main():
 
                 if bottom_num > 0:
                     _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
-                    with open(args.job_dir + '/softmaxP.log',"a") as f:
-                        f.write(f'==================== Epoch:{epoch}, layer {layerid}, m:{len(topm_ids)} ==================== \
-                                \n\ntopm_ids: {topm_ids} \
-                                \n\nP(m*n):{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)} \n\n\n')
-            
+                    logger_printP.info(f'topm_ids: {topm_ids}\n\n')
+                    logger_printP.info(f'P(m*n):{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)}\n\n')            
+
             print(f'cost: {time.time()-start:.2f}s')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
