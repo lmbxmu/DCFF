@@ -5,10 +5,10 @@ import os
 import time
 import thop.profile as profile
 
-import data.imagenet as imagenet
+import data.cifar10 as cifar10
 import utils.common as utils
 
-from models.imagenet import *
+from models.cifar import *
 
 from utils.options import args
 
@@ -28,140 +28,158 @@ loss_func = nn.CrossEntropyLoss()
 
 # Data
 print('==> Preparing data..')
-
-if args.data_set == 'imagenet':
-    data_tmp = imagenet.Data(args)
-    trainLoader = data_tmp.trainLoader
-    testLoader = data_tmp.testLoader
+if args.data_set == 'cifar10':
+    loader = cifar10.Data(args)
 else:
     raise NotImplementedError
 
-
 default_cprate={
-    #* ========== resnet50 ====================
-    #* len(cprate)=(1)+(3+4+6+3)+(3+4+6+3)+(4)=37
+    #* vgg16-ABCPlus
+    # 'vgg16':    [0.2]*3+[0.4]+[0.7]+[0.2]+[0.8]+[0.7]+[0.8]+[0.7]+[0.2]+[0.8]+[0.9],
+
+    #* vgg16-HRankPlus
+    # 'vgg16':    [0.21]*7+[0.75]*5+[0.0],
+    # 'vgg16':    [0.3]*7+[0.75]*5+[0.0],
+    'vgg16':    [0.45]*7+[0.78]*5+[0.0],
+
+    #* vgg16-TEST
+    # 'vgg16':    [0.5]*13,
+
+
+    #* ========== resnet56 ====================
+    #* len(cprate)=(9+9+9)+(3)=30
+    #* (9+9+9) is stage1~3's conv1 cprate
+    #* (3) is stage1~3's conv2's cprate, every blocks' conv2's cprate in the same stage should be the same.
+    #* pre-conv1's cprate is the same as stage1's conv2's cprate
+    #* ===== resnet56-ABCPlus =====
+    'resnet56': [0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+
+                [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+
+                [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+
+                [0.0]+[0.0]+[0.0],
+
+    #* ===== resnet56-HRankPlus =====
+    # 'resnet56':    [0.]+[0.18]*29,
+    # 'resnet56':    [0.]+[0.15]*2+[0.4]*27,
+    # 'resnet56':    [0.]+[0.4]*2+[0.5]*9+[0.6]*9+[0.7]*9,
+
+    #* ===== resnet56-TEST =====
+    # 'resnet56': [0.1]*9 + [0.2]*9 + [0.3]*9 + [0.4]+[0.5]+[0.6],
+
+
+    #* ========== resnet110 ====================
+    #* len(cprate)=(18+18+18)+(3)=57
+    #* (18+18+18) is stage1~3's conv1 cprate
+    #* (3) is stage1~3's conv2's cprate, every blocks' conv2's cprate in the same stage should be the same.
+    #* pre-conv1's cprate is the same as stage1's conv2's cprate
+    #* ===== resnet110-ABCPlus =====
+    'resnet110':[0.2]+[0.0]+[0.2]+[0.3]+[0.6]+[0.7]+[0.1]+[0.3]+[0.3]+[0.4]+[0.7]+[0.7]+[0.5]+[0.1]+[0.3]+[0.0]+[0.6]+[0.0]+
+                [0.2]+[0.5]+[0.0]+[0.6]+[0.7]+[0.5]+[0.7]+[0.7]+[0.3]+[0.4]+[0.0]+[0.3]+[0.1]+[0.5]+[0.0]+[0.1]+[0.0]+[0.7]+
+                [0.0]+[0.1]+[0.3]+[0.3]+[0.3]+[0.1]+[0.2]+[0.5]+[0.7]+[0.2]+[0.4]+[0.7]+[0.5]+[0.7]+[0.7]+[0.7]+[0.5]+[0.1]+
+                [0.6]+[0.2]+[0.5],
+
+    #* ===== resnet110-HRankPlus =====
+    # 'resnet110':[0.]+[0.2]*2+[0.3]*18+[0.35]*36,
+    # 'resnet110':[0.]+[0.25]*2+[0.4]*18+[0.55]*36,
+    # 'resnet110':[0.]+[0.4]*2+[0.5]*18+[0.65]*36,
+
+    #* ===== resnet110-TEST =====
+    # 'resnet110':[0.1]*18 + [0.2]*18 + [0.3]*18 + [0.4]+[0.5]+[0.6],
+
+
+    #* ========== googlenet ====================
+    #* len(cprate)=(1) + (7+7+7+7+7+7+7+7+7)
     #* (1) is pre-conv1's cprate
-    #* first  (3+4+6+3) is stage1~4's conv1(1*1)'s cprate,
-    #* second (3+4+6+3) is stage1~4's conv2(3*3)'s cprate,
-    #* (4) is stage1~4's conv3(1*1)'s cprate, every blocks' conv3's cprate in the same stage should be the same.
-    
-    #* ========== resnet50-ABCPlus ==========
-    # 'resnet50': [0.0]+
-    #             [0.5]*9+[0.6]*7+
-    #             [0.5]*9+[0.6]*7+
-    #             [0.6]*4,
-    # 'resnet50': [0.0]+
-    #             [0.4]*16+
-    #             [0.4]*16+
-    #             [0.5]*4,
-    # 'resnet50': [0.0]+
-    #             [0.1]*5+[0.2]*11+
-    #             [0.1]*5+[0.2]*11+
-    #             [0.2]*4,
-    'resnet50': [0.0]+ 
-                [0.4]*10+[0.5]*6+ 
-                [0.4]*10+[0.5]*6+ 
-                [0.5]*4,
+    #* (7+7+7+7+7+7+7+7+7) is block1~9'cprate, every block has 7 conv layers.
+    #* ===== googlenet-ABCPlus =====
+    'googlenet':[0.0]+
 
-    #* ========== resnet50-HRankPlus ==========
-    # 'resnet50':    [0.]+[0.35]*16+[0.1]*3+[0.0],
-    # 'resnet50':    [0.]+[0.5]*16+[0.25]*3+[0.0],
-    # 'resnet50':    [0.]+[0.6]*16+[0.5]*3+[0.0],
+                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
 
-    #* ========== resnet50-TEST ==========
-    # 'resnet50': [0.9]+
-    #             [0.11]*3+[0.12]*4+[0.13]*6+[0.14]*3+
-    #             [0.21]*3+[0.22]*4+[0.23]*6+[0.24]*3+
-    #             [0.31]+[0.32]+[0.33]+[0.34],
+                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+
+                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
+                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
+                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
+
+                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0],
 
 
-    #* ========== mobilenetv1 ====================
-    #* len(cprate)=(1)+(13)=14
-    #* ========== mobilenetv1-TEST ==========
-    'mobilenetv1':[0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14],
+    #* ===== googlenet-HRankPlus =====
+    # 'googlenet':[0.3]+[0.6]*2+[0.7]*5+[0.8]*2,
+    # 'googlenet':[0.4]+[0.85]*2+[0.9]*5+[0.9]*2,
 
-    #* ========== mobilenetv2 ====================
-    #* len(cprate)=(1) + (1)+(2+1)+(2+1+1)+(2+1+1+1)+(2+1+1)+(2+1+1)+(2) + (1) = 25
-    #* ========== mobilenetv2-TEST ==========
-    'mobilenetv2':[0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2, 0.21, 0.22, 0.23, 0.24, 0.25],
-
- 
+    #* ===== googlenet-TEST =====
+    # 'googlenet':[0.0]+[0.1]+[0.2]+[0.3]+[0.4]+[0.5]+[0.6]+[0.7]+[0.8]+[0.9],    
 }
+
+
 
 #* Compute cprate
 if args.cprate:
     cprate = eval(args.cprate)
 else:
-    cprate = default_cprate[args.arch]
+    cprate = cprate = default_cprate[args.arch]
 
-logger.info(f'{args.arch}\'s cprate: \n{cprate}')
+logger.info(f'cprate: \n{cprate}')
 
 
 #* Compute resnet lawer-wise cprate
+
 layer_wise_cprate = []
-if 'resnet' in args.arch:
-    resnet_block_num = {
-        'resnet50': [3,4,6,3],
-    }
-    total_block_num = sum(resnet_block_num[args.arch])
-
-    pre_conv1_cprate = cprate[0]
-
-    block_conv1_cprates = cprate[1 : 1+total_block_num]
-    print(block_conv1_cprates)
-
-    block_conv2_cprates = cprate[1+total_block_num : 1+total_block_num*2]
-    print(block_conv2_cprates)
-
-    block_conv3_cprates = []
-    for stageid, block_conv3_cprate in enumerate(cprate[-4:]):
-        for i in range(resnet_block_num[args.arch][stageid]):
-            block_conv3_cprates.append(block_conv3_cprate)
-    print(block_conv3_cprates)
-
-    for item in zip(block_conv1_cprates, block_conv2_cprates, block_conv3_cprates):
-        layer_wise_cprate += list(item)
-    layer_wise_cprate.insert(0, cprate[0])
-
-elif 'mobilenetv1' == args.arch:
+if 'vgg' in args.arch:
     layer_wise_cprate = cprate
 
-elif 'mobilenetv2' == args.arch:
-    shortcut_id = [4,7,8,11,12,13,16,17,20,21]
-    for i in range(25):
-        if i in shortcut_id:
-            layer_wise_cprate.append(cprate[i])
-            layer_wise_cprate.append(layer_wise_cprate[-2])
-        else:
-            layer_wise_cprate.append(cprate[i])
+elif 'resnet' in args.arch:
+    resnet_block_num = {
+        'resnet56': 9,
+        'resnet110':18,
+    }
+    block_conv2_cprate = [val for val in cprate[-3:] for i in range(resnet_block_num[args.arch])]
+    for item in zip(cprate[0:-3], block_conv2_cprate):
+        layer_wise_cprate += list(item)
+    layer_wise_cprate.insert(0, cprate[-3])
+
+elif 'googlenet' == args.arch:
+    # block_cprate = [val for val in cprate[1:] for i in range(7)]
+    # layer_wise_cprate = cprate[0:1]+block_cprate
+    layer_wise_cprate = cprate
 else:
     raise NotImplementedError
-
 print(f'layer-wise cprate: \n{layer_wise_cprate}')
 
 
 # Model
 print('==> Building model..')
-if args.arch == 'resnet50':
-    model = fused_resnet50(cprate=layer_wise_cprate)
-    compact_model = compact_resnet50(cprate=layer_wise_cprate)
-    origin_model = origin_resnet50()
+if args.arch == 'vgg16':
+    model = Fused_VGG(vgg_name='vgg16', cprate=layer_wise_cprate)
+    compact_model = Compact_VGG(vgg_name='vgg16', cprate=layer_wise_cprate)
+    origin_model = OriginVGG(vgg_name='vgg16')
 
-elif args.arch == 'mobilenetv1':
-    model = fused_mobilenetv1(layer_wise_cprate)
-    compact_model = compact_mobilenetv1(layer_wise_cprate)
-    origin_model = origin_mobilenetv1()
+elif args.arch == 'resnet56':
+    model = fused_resnet56(cprate=layer_wise_cprate)
+    compact_model = compact_resnet56(cprate=layer_wise_cprate)
+    origin_model = origin_resnet56()
 
-elif args.arch =='mobilenetv2':
-    model = fused_mobilenetv2(layer_wise_cprate)
-    compact_model = compact_mobilenetv2(layer_wise_cprate)
-    origin_model = origin_mobilenetv2()
+elif args.arch == 'resnet110':
+    model = fused_resnet110(cprate=layer_wise_cprate)
+    compact_model = compact_resnet110(cprate=layer_wise_cprate)
+    origin_model = origin_resnet110()
+
+elif args.arch == 'googlenet':
+    model = FusedGoogLeNet(layer_wise_cprate)
+    compact_model = CompactGoogLeNet(layer_wise_cprate)
+    origin_model = OriginGoogLeNet()
 else:
     raise NotImplementedError
 
+# print(model)
+# exit(0)
 
 #* Compute flops, flops, puring rate
-# inputs = torch.randn(1, 3, 224, 224)
+# inputs = torch.randn(1, 3, 32, 32)
 # compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
 # origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
 
@@ -171,63 +189,28 @@ else:
 # logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
 # exit(0)
 
+
 model = model.to(device)
+
 
 if len(args.gpus) != 1:
     model = nn.DataParallel(model, device_ids=args.gpus)
 
 
-def adjust_learning_rate(optimizer, epoch, step, len_epoch):
-    
-    if args.lr_type == 'step':
-        factor = epoch // 30
-        if epoch >= 80:
-            factor = factor + 1
-        lr = args.lr * (0.1 ** factor)
-    elif args.lr_type == 'cos':  # cos without warm-up
-        lr = 0.5 * args.lr * (1 + math.cos(math.pi * (epoch - 5) / (args.num_epochs - 5)))
-    elif args.lr_type == 'exp':
-        step = 1
-        decay = 0.96
-        lr = args.lr * (decay ** (epoch // step))
-    elif args.lr_type == 'fixed':
-        lr = args.lr
-    else:
-        raise NotImplementedError
-
-    # Warmup
-    if epoch < 5:
-            lr = lr * float(1 + step + epoch * len_epoch) / (5. * len_epoch)
-    if step == 0:
-        print('current learning rate:{0}'.format(lr))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-
 # Training function
-def train(model, optimizer, trainLoader, args, epoch, topk=(1,)):
+def train(model, optimizer, trainLoader, args, epoch):
     print(f'\nEpoch: {epoch+1}')
     model.train()
 
     losses = utils.AverageMeter()
     accuracy = utils.AverageMeter()
-    top5_accuracy = utils.AverageMeter()
-    print_freq = len(trainLoader.dataset) // 10
-    # print_freq = 10
+    print_freq = len(trainLoader.dataset) // args.train_batch_size // 10
 
     start_time = time.time()
 
-    total = 0
-    correct = 0
-
-
     for batch_idx, (inputs, targets) in enumerate(trainLoader):
-        if args.debug:
-            if batch_idx > 5:
-                break
         inputs, targets = inputs.to(device), targets.to(device)
 
-        adjust_learning_rate(optimizer, epoch, batch_idx, len(trainLoader) // args.train_batch_size)
 
         optimizer.zero_grad()
         outputs = model(inputs)
@@ -236,79 +219,62 @@ def train(model, optimizer, trainLoader, args, epoch, topk=(1,)):
         losses.update(loss.item(), inputs.size(0))
         optimizer.step()
 
-        prec1 = utils.accuracy(outputs, targets, topk=topk)
+        prec1 = utils.accuracy(outputs, targets)
         accuracy.update(prec1[0], inputs.size(0))
-        top5_accuracy.update(prec1[1], inputs.size(0))
 
         if batch_idx % print_freq == 0 and batch_idx != 0:
             current_time = time.time()
             cost_time = current_time - start_time
             logger.info(
-                f'Epoch[{epoch}] ({batch_idx} / {len(trainLoader)}):\t'
-                f'Loss: {float(losses.avg):.6f}\t'
-                f'Top1: {float(accuracy.avg):.6f}%\t'
-                f'Top5: {float(top5_accuracy.avg):.6f}%\t'
+                f'Epoch[{epoch}] ({batch_idx * args.train_batch_size} / {len(trainLoader.dataset)}):\t'
+                f'Loss: {float(losses.avg):.4f}\t'
+                f'Acc: {float(accuracy.avg):.2f}%\t\t'
                 f'Time: {cost_time:.2f}s'
             )
             start_time = current_time
 
 
-
-
 # Testing function
-def test(model, testLoader, topk=(1,)):
+def test(model, testLoader):
+    global best_acc
     model.eval()
 
     losses = utils.AverageMeter()
     accuracy = utils.AverageMeter()
-    top5_accuracy = utils.AverageMeter()
 
     start_time = time.time()
 
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testLoader):
-            if args.debug:
-                if batch_idx > 5:
-                    break
             inputs, targets = inputs.to(device), targets.to(device)
-
             outputs = model(inputs)
             loss = loss_func(outputs, targets)
 
             losses.update(loss.item(), inputs.size(0))
-            predicted = utils.accuracy(outputs, targets, topk=topk)
+            predicted = utils.accuracy(outputs, targets)
             accuracy.update(predicted[0], inputs.size(0))
-            top5_accuracy.update(predicted[1], inputs.size(0))
-
-            # Debug
-            if args.debug:
-                current_time = time.time()
-                logger.info(
-                    f'Test Loss: {float(losses.avg):.6f}\t Top1: {float(accuracy.avg):.6f}%\t'
-                    f'Top5: {float(accuracy.avg):.6f}%\t Time: {float(current_time - start_time):.2f}s'
-                )
 
         current_time = time.time()
         logger.info(
-            f'Test Loss: {float(losses.avg):.6f}\t Top1: {float(accuracy.avg):.6f}%\t'
-            f'Top5: {float(accuracy.avg):.6f}%\t Time: {float(current_time - start_time):.2f}s'
+            f'Test Loss: {float(losses.avg):.4f}\t Acc: {float(accuracy.avg):.2f}%\t\t Time: {(current_time - start_time):.2f}'
         )
+    return accuracy.avg
 
-    return float(accuracy.avg), float(top5_accuracy.avg)
 
-
-#* main function
+# main function
 def main():
     global model, compact_model, origin_model
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    scheduler = optim.lr_scheduler.MultiStepLR(
+        optimizer, milestones=args.lr_decay_step, gamma=0.1)
 
-    #* Resume from checkpoint (Train from pre-train model)
+    # Resume from checkpoint (Train from pre-train model)
     if args.resume:
-        #* Load ckpt file.
+        # Load ckpt file.
         print('==> Resuming from checkpoint file..')
         assert os.path.isfile(args.resume), 'Error: no checkpoint file found!'
-        resume_ckpt = torch.load(args.resume, map_location=device)
+        resume_ckpt = torch.load(args.resume)
 
         state_dict = resume_ckpt['state_dict']
 
@@ -325,20 +291,22 @@ def main():
             model.load_state_dict(new_state_dict)
 
         optimizer.load_state_dict(resume_ckpt['optimizer'])
+        scheduler.load_state_dict(resume_ckpt['scheduler'])
         start_epoch = resume_ckpt['epoch']
-        best_top1_acc = resume_ckpt['best_top1_acc']
-        best_top5_acc = resume_ckpt['best_top5_acc']
+        best_acc = resume_ckpt['best_acc']
+
+
     #* Train from scratch
     else:
         start_epoch = 0
-        best_top1_acc = 0.0
-        best_top5_acc = 0.0
+        best_acc = 0.0
 
 
     #* Test only
     if args.test_only:
-        test(model, testLoader, topk=(1, 5))
-        
+        test(model, loader.testLoader)
+
+
     #* Train
     else:
         #* setup fused_conv_modules
@@ -381,17 +349,11 @@ def main():
                 layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
 
                 #* Compute layeri_KL
-                try:
-                    layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
-                except:
-                    layeri_softmaxP = layeri_softmaxP.cpu()
-                    layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
-                    layeri_softmaxP = layeri_softmaxP.cuda()
-                    layeri_KL = layeri_KL.cuda()
+                layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
 
                 #* Compute layeri_iScore
                 layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
-
+                
                 #* setup conv_module.layeri_topm_filters_id
                 _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
 
@@ -405,31 +367,31 @@ def main():
                     _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
                     with open(args.job_dir + '/softmaxP.log',"a") as f:
                         f.write(f'==================== Epoch:{epoch}, layer {layerid}, m:{len(topm_ids)} ==================== \
+                                \n\ntopm_ids: {topm_ids} \
                                 \n\nP(m*n):{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)} \n\n\n')
             
             print(f'cost: {time.time()-start:.2f}s')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
-            train(model, optimizer, trainLoader, args, epoch, topk=(1, 5))
-            test_top1_acc, test_top5_acc = test(model, testLoader, topk=(1, 5))
-            
-            is_best = best_top5_acc < test_top5_acc
-            best_top1_acc = max(best_top1_acc, test_top1_acc)
-            best_top5_acc = max(best_top5_acc, test_top5_acc)
+            train(model, optimizer, loader.trainLoader, args, epoch)
+            scheduler.step()
+            test_acc = float(test(model, loader.testLoader))
 
-            
+            is_best = best_acc < test_acc
+            best_acc = max(best_acc, test_acc)
+
             model_state_dict = model.module.state_dict() if len(args.gpus) > 1 else model.state_dict()
             
             state = {
                 'state_dict': model_state_dict,
                 'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
                 'epoch': epoch + 1,
-                'best_top1_acc': best_top1_acc,
-                'best_top5_acc': best_top5_acc,
+                'best_acc': best_acc,
             }
             checkpoint.save_model(state, epoch + 1, is_best)
 
-            if is_best or args.debug:
+            if is_best:
                 #* Compute best compact_state_dict
                 compact_state_dict = OrderedDict()
                 for name, module in model.named_modules():
@@ -455,18 +417,20 @@ def main():
                 #* Save best compact_state_dict
                 checkpoint.save_compact_model(compact_state_dict)
 
-        logger.info(f'Best Acc-top1: {float(best_top1_acc):.6f}, Acc-top5: {float(best_top5_acc):.6f}')
+        logger.info(f'Best model accuracy: {best_acc:.2f}')
 
 
         #* Test compact model
         compact_model = compact_model.to(device)
+        
         compact_state_dict = torch.load(f'{args.job_dir}/checkpoint/model_best_compact.pt')
         compact_model.load_state_dict(compact_state_dict)
-        compact_test_acc = test(compact_model, testLoader, topk=(1, 5))
-        logger.info(f'Best Compact model accuracy Top1: {compact_test_acc[0]:.6f}%, Top5: {compact_test_acc[1]:.6f}%')
+        
+        compact_test_acc = float(test(compact_model, loader.testLoader))
+        logger.info(f'Best Compact model accuracy:{compact_test_acc:.2f}%')
 
         #* Compute flops, flops, puring rate
-        inputs = torch.randn(1, 3, 224, 224)
+        inputs = torch.randn(1, 3, 32, 32)
         compact_model = compact_model.cpu()
         compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
         origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
