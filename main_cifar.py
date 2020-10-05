@@ -291,8 +291,7 @@ def main():
     global model, compact_model, origin_model
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=args.lr_decay_step, gamma=0.1)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_decay_step, gamma=0.1)
 
     # Resume from checkpoint (Train from pre-train model)
     if args.resume:
@@ -367,28 +366,33 @@ def main():
 
                 #* Compute layeri_param
                 layeri_param = torch.reshape(param.detach(), (param.shape[0], -1))      #* layeri_param.shape=[cout, cin, k, k], layeri_param[j] means filterj's weight.
-
+                logger_printP.info(f'\nlayeri_param:\n{layeri_param}\n\n')
+                # logger_printP.info(f'\ntorch.mean(layeri_param, dim=1):\n{torch.mean(layeri_param, dim=1)}\n')
                 #* Compute layeri_negaEudist
                 # layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
-                layeri_negaEudist = -torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
-                # exit()
+                layeri_negaEudist = torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
+                torch.set_printoptions(precision=4, threshold=1e999)
+                logger_printP.info(f'\nlayeri_negaEudist:\n{layeri_negaEudist}\n')
+                torch.set_printoptions(profile='default')
+                logger_printP.info(f'\ntorch.mean(layeri_negaEudist, dim=1):\n{torch.mean(layeri_negaEudist, dim=1)}\n')
+                logger_printP.info(f'\ntorch.max(layeri_negaEudist, dim=1):\n{torch.max(layeri_negaEudist, dim=1)}\n\n')
 
                 _, idx = torch.max(layeri_negaEudist, dim=1)
 
                 if torch.unique(idx).shape != idx.shape:
                     # torch.set_printoptions(precision=8, threshold=1e999)
-                    logger_printP.info(f'layeri_param:{layeri_param}\n\n')
-                    logger_printP.info(f'layeri_negaEudist: {torch.max(layeri_negaEudist, dim=1)}\n\n')
+                    # logger_printP.info(f'\nlayeri_param:\n{layeri_param}\n\n')
                     # torch.set_printoptions(profile='default')
+                    logger_printP.info(f'\ntorch.unique(idx).shape:\n{torch.unique(idx).shape}, idx.shape:{idx.shape}')
                 
                 #* Compute layeri_softmaxP
                 softmax = nn.Softmax(dim=1)
                 layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
-                logger_printP.info(f'layeri_softmaxP: {torch.max(layeri_softmaxP, dim=1)}\n\n')
+                logger_printP.info(f'\ntorch.max(layeri_softmaxP, dim=1):\n{torch.max(layeri_softmaxP, dim=1)}\n\n')
                 
                 #* Compute layeri_KL
                 layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/layeri_softmaxP).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
-                logger_printP.info(f'layeri_KL: {torch.max(layeri_KL, dim=1)}\n\n')
+                logger_printP.info(f'\ntorch.max(layeri_KL, dim=1):\n{torch.max(layeri_KL, dim=1)}\n\n')
 
                 #* Compute layeri_iScore
                 layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
@@ -398,7 +402,7 @@ def main():
                 _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
 
                 ###*
-                logger_printP.info(f'layeri_iScore: {layeri_iScore[topm_ids]}\n\n')
+                logger_printP.info(f'\nlayeri_iScore[topm_ids]:\n{layeri_iScore[topm_ids]}\n\n')
 
                 ##* setup conv_module.layeri_softmaxP
                 module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
@@ -408,8 +412,8 @@ def main():
 
                 if bottom_num > 0:
                     _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
-                    logger_printP.info(f'topm_ids: {topm_ids}\n\n')
-                    logger_printP.info(f'P(m*n):{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)}\n\n')            
+                    logger_printP.info(f'\ntopm_ids: {topm_ids}\n\n')
+                    logger_printP.info(f'\nP(m*n):\n{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):\n{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)}\n\n')            
 
             print(f'cost: {time.time()-start:.2f}s')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
@@ -466,7 +470,7 @@ def main():
         
         compact_state_dict = torch.load(f'{args.job_dir}/checkpoint/model_best_compact.pt')
         compact_model.load_state_dict(compact_state_dict)
-        
+
         compact_test_acc = float(test(compact_model, loader.testLoader))
         logger.info(f'Best Compact model accuracy:{compact_test_acc:.2f}%')
 
