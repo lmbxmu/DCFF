@@ -13,11 +13,9 @@ from models.imagenet import *
 from utils.options import args
 
 #*
-import torch.nn.functional as F
 import numpy as np
 from collections import OrderedDict
 from thop import profile
-from scipy.stats import entropy
 
 
 
@@ -96,7 +94,6 @@ if args.cprate:
 else:
     cprate = default_cprate[args.arch]
 
-
 logger.info(f'{args.arch}\'s cprate: \n{cprate}')
 
 
@@ -141,7 +138,7 @@ else:
     raise NotImplementedError
 
 print(f'layer-wise cprate: \n{layer_wise_cprate}')
-# exit(0)
+
 
 # Model
 print('==> Building model..')
@@ -344,7 +341,7 @@ def main():
         
     #* Train
     else:
-        #*
+        #* setup fused_conv_modules
         fused_conv_modules = []
         for name, module in model.named_modules():
             if isinstance(module, FuseConv2d):
@@ -353,24 +350,19 @@ def main():
         #* setup conv_module.layerid / layers_cout
         layers_cout = []
         for layerid, module in enumerate(fused_conv_modules):
-            module.layerid = layerid
             layers_cout.append(module.out_channels)
 
         #* Compute layers_m
         layers_cout = np.asarray(layers_cout)
         layers_cprate = np.asarray(layer_wise_cprate)
-
-        print(layers_cout)
-        print(layers_cprate)
         layers_m = (layers_cout * (1-layers_cprate)).astype(int)
-        print(layers_cout)
-        print(layers_m)
 
 
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
             #* Compute t, t tends to 0 as epochs increases to num_epochs.
             # t = 1 - epoch / args.num_epochs
             t=eval(args.t_expression)
+
             #* Compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
             start = time.time()
             for layerid, module in enumerate(fused_conv_modules):
@@ -400,11 +392,7 @@ def main():
                 #* Compute layeri_iScore
                 layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
 
-                #* setup conv_module's traning-aware attr.
-                ##* setup conv_module.epoch
-                module.epoch = epoch
-
-                ##* setup conv_module.layeri_topm_filters_id
+                #* setup conv_module.layeri_topm_filters_id
                 _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
 
                 ##* setup conv_module.layeri_softmaxP
@@ -412,13 +400,14 @@ def main():
 
                 ###* printP
                 bottom_num = layers_cout[layerid]-layers_m[layerid]
+
                 if bottom_num > 0:
                     _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
                     with open(args.job_dir + '/softmaxP.log',"a") as f:
                         f.write(f'==================== Epoch:{epoch}, layer {layerid}, m:{len(topm_ids)} ==================== \
                                 \n\nP(m*n):{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)} \n\n\n')
-            print(f'cost: {time.time()-start}')
-
+            
+            print(f'cost: {time.time()-start:.2f}s')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
             train(model, optimizer, trainLoader, args, epoch, topk=(1, 5))
@@ -474,7 +463,7 @@ def main():
         compact_state_dict = torch.load(f'{args.job_dir}/checkpoint/model_best_compact.pt')
         compact_model.load_state_dict(compact_state_dict)
         compact_test_acc = test(compact_model, testLoader, topk=(1, 5))
-        logger.info(f'Best Compact model accuracy Top1: {compact_test_acc[0]:.6f}, Top5: {compact_test_acc[1]:.6f}')
+        logger.info(f'Best Compact model accuracy Top1: {compact_test_acc[0]:.6f}%, Top5: {compact_test_acc[1]:.6f}%')
 
         #* Compute flops, flops, puring rate
         inputs = torch.randn(1, 3, 224, 224)
@@ -484,8 +473,10 @@ def main():
 
         flops_prate = (origin_flops-compact_flops)/origin_flops
         params_prate = (origin_params-compact_params)/origin_params
-        logger.info(f'{args.arch}\'s baseline model: FLOPs={origin_flops/10**6:.2f}M (0.0%), Params={origin_params/10**6:.2f}M (0.0%)')
-        logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
+        logger.info(f'{args.arch}\'s baseline model: FLOPs = {origin_flops/10**6:.2f}M (0.0%), Params = {origin_params/10**6:.2f}M (0.0%)')
+        logger.info(f'{args.arch}\'s pruned   model: FLOPs = {compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params = {compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
+
+
 
 if __name__ == '__main__':
     main()

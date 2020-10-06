@@ -39,7 +39,9 @@ class CheckPoint():
         self.run_dir = self.job_dir / 'run'
 
         if args.reset:
+            print('rm -rf', args.job_dir)
             os.system('rm -rf ' + args.job_dir)
+            
 
         def _make_dir(path):
             if not os.path.exists(path):
@@ -70,8 +72,8 @@ class CheckPoint():
         print('Save model_best_compact.pt')
 
 
-def GetLogger(file_path):
-    logger = logging.getLogger('gal')
+def GetLogger(logger_name, file_path):
+    logger = logging.getLogger(logger_name)
     log_format = '%(asctime)s | %(message)s'
     formatter = logging.Formatter(log_format, datefmt='%m/%d %I:%M:%S %p')
     file_handler = logging.FileHandler(file_path)
