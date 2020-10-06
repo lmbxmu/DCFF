@@ -353,65 +353,67 @@ def main():
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
             #* Compute t, t tends to 0 as epochs increases to num_epochs.
             # t = 1 - epoch / args.num_epochs
-            t=eval(args.t_expression)
+            # t=eval(args.t_expression)
+            t=1
 
             #* Compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
-            start = time.time()
-            for layerid, module in enumerate(fused_conv_modules):
-                logger_printP.info(f'==================== Epoch:{epoch}, layer {layerid} ====================\n\n')
-                
-                print(layerid)
+            if epoch == 0:
+                start = time.time()
+                for layerid, module in enumerate(fused_conv_modules):
+                    logger_printP.info(f'==================== Epoch:{epoch}, layer {layerid} ====================\n\n')
+                    
+                    print(layerid)
 
-                param = module.weight
+                    param = module.weight
 
-                #* Compute layeri_param
-                layeri_param = torch.reshape(param.detach(), (param.shape[0], -1))      #* layeri_param.shape=[cout, cin, k, k], layeri_param[j] means filterj's weight.
-                logger_printP.info(f'\nlayeri_param:\n{layeri_param}\n\n')
-                # logger_printP.info(f'\ntorch.mean(layeri_param, dim=1):\n{torch.mean(layeri_param, dim=1)}\n')
-                #* Compute layeri_negaEudist
-                # layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
-                layeri_negaEudist = torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
-                # logger_printP.info(f'\nlayeri_negaEudist:\n{layeri_negaEudist}\n')
-                logger_printP.info(f'\ntorch.mean(layeri_negaEudist, dim=1):\n{torch.mean(layeri_negaEudist, dim=1)}\n')
-                logger_printP.info(f'\ntorch.max(layeri_negaEudist, dim=1):\n{torch.max(layeri_negaEudist, dim=1)}\n\n')
+                    #* Compute layeri_param
+                    layeri_param = torch.reshape(param.detach(), (param.shape[0], -1))      #* layeri_param.shape=[cout, cin, k, k], layeri_param[j] means filterj's weight.
+                    logger_printP.info(f'\nlayeri_param:\n{layeri_param}\n\n')
+                    # logger_printP.info(f'\ntorch.mean(layeri_param, dim=1):\n{torch.mean(layeri_param, dim=1)}\n')
+                    #* Compute layeri_negaEudist
+                    # layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
+                    layeri_negaEudist = -torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
+                    # logger_printP.info(f'\nlayeri_negaEudist:\n{layeri_negaEudist}\n')
+                    logger_printP.info(f'\ntorch.mean(layeri_negaEudist, dim=1):\n{torch.mean(layeri_negaEudist, dim=1)}\n')
+                    logger_printP.info(f'\ntorch.max(layeri_negaEudist, dim=1):\n{torch.max(layeri_negaEudist, dim=1)}\n\n')
 
-                _, idx = torch.max(layeri_negaEudist, dim=1)
+                    _, idx = torch.max(layeri_negaEudist, dim=1)
 
-                if torch.unique(idx).shape != idx.shape:
-                    logger_printP.info(f'\ntorch.unique(idx).shape:\n{torch.unique(idx).shape}, idx.shape:{idx.shape}')
-                
-                #* Compute layeri_softmaxP
-                softmax = nn.Softmax(dim=1)
-                layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
-                logger_printP.info(f'\ntorch.max(layeri_softmaxP, dim=1):\n{torch.max(layeri_softmaxP, dim=1)}\n\n')
-                
-                #* Compute layeri_KL
-                layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/(layeri_softmaxP+10**-7)).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
-                logger_printP.info(f'\ntorch.max(layeri_KL, dim=1):\n{torch.max(layeri_KL, dim=1)}\n\n')
+                    if torch.unique(idx).shape != idx.shape:
+                        logger_printP.info(f'\ntorch.unique(idx).shape:\n{torch.unique(idx).shape}, idx.shape:{idx.shape}')
+                    
+                    #* Compute layeri_softmaxP
+                    softmax = nn.Softmax(dim=1)
+                    layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
+                    logger_printP.info(f'\ntorch.max(layeri_softmaxP, dim=1):\n{torch.max(layeri_softmaxP, dim=1)}\n\n')
+                    
+                    #* Compute layeri_KL
+                    layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/(layeri_softmaxP+10**-7)).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
+                    logger_printP.info(f'\ntorch.max(layeri_KL, dim=1):\n{torch.max(layeri_KL, dim=1)}\n\n')
 
-                #* Compute layeri_iScore
-                layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
-                
+                    #* Compute layeri_iScore
+                    layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
+                    
 
-                #* setup conv_module.layeri_topm_filters_id
-                _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
+                    #* setup conv_module.layeri_topm_filters_id
+                    _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
 
-                ###*
-                logger_printP.info(f'\nlayeri_iScore[topm_ids]:\n{layeri_iScore[topm_ids]}\n\n')
+                    ###*
+                    logger_printP.info(f'\nlayeri_iScore[topm_ids]:\n{layeri_iScore[topm_ids]}\n\n')
 
-                ##* setup conv_module.layeri_softmaxP
-                module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
+                    ##* setup conv_module.layeri_softmaxP
+                    module.layeri_softmaxP = layeri_softmaxP[topm_ids, :]
 
-                ###* printP
-                bottom_num = layers_cout[layerid]-layers_m[layerid]
+                    ###* printP
+                    bottom_num = layers_cout[layerid]-layers_m[layerid]
 
-                if bottom_num > 0:
-                    _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
-                    logger_printP.info(f'\ntopm_ids: {topm_ids}\n\n')
-                    logger_printP.info(f'\nP(m*n):\n{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):\n{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)}\n\n')            
+                    if bottom_num > 0:
+                        _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
+                        logger_printP.info(f'\ntopm_ids: {topm_ids}\n\n')
+                        logger_printP.info(f'\nP(m*n):\n{torch.max(layeri_softmaxP[topm_ids, :], dim=1)}, \n\nP((n-m)*n):\n{torch.max(layeri_softmaxP[bottom_ids, :], dim=1)}\n\n')            
 
-            print(f'cost: {time.time()-start:.2f}s')
-            del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
+                print(f'cost: {time.time()-start:.2f}s')
+                del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
 
             train(model, optimizer, loader.trainLoader, args, epoch)
             scheduler.step()
