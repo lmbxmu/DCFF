@@ -200,7 +200,7 @@ if len(args.gpus) != 1:
 
 
 # Training function
-def train(model, optimizer, trainLoader, args, epoch):
+def train(model, optimizer, trainLoader, args, epoch, fused_conv_names, fused_conv_modules, topm_ids):
     print(f'\nEpoch: {epoch+1}')
     model.train()
 
@@ -219,6 +219,10 @@ def train(model, optimizer, trainLoader, args, epoch):
         loss = loss_func(outputs, targets)
         loss.backward()
         losses.update(loss.item(), inputs.size(0))
+        #*
+        if args.compute_wd:
+            weight_decay_Conv2d(fused_conv_names, fused_conv_modules, topm_ids)
+
         optimizer.step()
 
         prec1 = utils.accuracy(outputs, targets)
@@ -263,13 +267,39 @@ def test(model, testLoader):
     return accuracy.avg
 
 
+def weight_decay_Conv2d(fused_conv_names, fused_conv_modules, topm_ids):
+    for module in model.modules():
+        if isinstance(module, nn.Conv2d) and not isinstance(module, FuseConv2d):
+            module.weight.grad.data.add_(module.weight.data, alpha=args.weight_decay)
+
+    for fconv_id, module in enumerate(fused_conv_modules):
+        for filter_id in range(module.weight.shape[0]):
+            if filter_id in topm_ids[fconv_id]:
+                module.weight.grad.data[filter_id].add_(module.weight.data[filter_id], alpha=args.weight_decay)
+
+# def weight_decay_Conv2d(fused_conv_names, fused_conv_modules, topm_ids):
+#     fconv_id = -1
+#     for module in model.modules():
+#         if isinstance(module, nn.Conv2d):
+#             if isinstance(module, FuseConv2d):
+#                 fconv_id += 1
+#                 for filter_id in range(module.weight.shape[0]):
+#                     if filter_id in topm_ids[fconv_id]:
+#                         module.weight.grad.data[filter_id].add_(module.weight.data[filter_id], alpha=args.weight_decay)
+#             else:
+#                 module.weight.grad.data.add_(module.weight.data, alpha=args.weight_decay)
+
 # main function
 def main():
     global model, compact_model, origin_model
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=args.lr_decay_step, gamma=0.1)
+    #*
+    if args.compute_wd:
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+    else:
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_decay_step, gamma=0.1)
 
     # Resume from checkpoint (Train from pre-train model)
     if args.resume:
@@ -313,9 +343,11 @@ def main():
     else:
         #* setup fused_conv_modules
         fused_conv_modules = []
+        fused_conv_names = []
         for name, module in model.named_modules():
             if isinstance(module, FuseConv2d):
                 fused_conv_modules.append(module)
+                fused_conv_names.append(name)
 
         #* setup conv_module.layerid / layers_cout
         layers_cout = []
@@ -327,12 +359,11 @@ def main():
         layers_cprate = np.asarray(layer_wise_cprate)
         layers_m = (layers_cout * (1-layers_cprate)).astype(int)
 
-
+        topm_ids = []
+        topm_ids_order = []
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
-            #* Compute t, t tends to 0 as epochs increases to num_epochs.
-            # t = 1 - epoch / args.num_epochs
+            #* Compute t
             t=eval(args.t_expression)
-            # t = 0.1
 
             #* Compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
             start = time.time()
@@ -345,7 +376,6 @@ def main():
                 layeri_param = torch.reshape(param.detach(), (param.shape[0], -1))      #* layeri_param.shape=[cout, cin, k, k], layeri_param[j] means filterj's weight.
 
                 #* Compute layeri_negaEudist
-                # layeri_negaEudist = torch.mul(torch.cdist(layeri_param, layeri_param, p=2), -1)     #* layeri_negaEudist.shape=[cout, cout], layeri_negaEudist[j, k] means the negaEudist between filterj ans filterk.
                 layeri_negaEudist = -torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
 
                 #* Compute layeri_softmaxP
@@ -353,38 +383,58 @@ def main():
                 layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
 
                 #* Compute layeri_KL
-                layeri_KL = torch.sum(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/(layeri_softmaxP+10**-7)).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
+                layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/(layeri_softmaxP+args.kl_add)).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
 
                 #* Compute layeri_iScore
-                layeri_iScore = torch.sum(layeri_KL, dim=1)        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
-                
+                layeri_iScore_kl = torch.sum(layeri_KL, dim=1)
+                layeri_iScore = layeri_iScore_kl        #* layeri_iScore.shape=[cout], layeri_iScore[j] means filterj's importance score
+
+
                 #* setup conv_module.layeri_topm_filters_id
-                _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
+                # _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
+                # _, topm_ids_order = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
+                if epoch == 0:
+                    _, topmid_tmp = torch.topk(layeri_iScore, layers_m[layerid])
+                    _, topmid_order_tmp = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
+                    topm_ids.append(topmid_tmp)
+                    topm_ids_order.append(topmid_order_tmp)
+                else:
+                    if args.fix_topm:
+                        pass
+                    else:
+                        _, topm_ids[layerid] = torch.topk(layeri_iScore, layers_m[layerid])
+                        _, topm_ids_order[layerid] = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
 
-                _, topm_ids_order = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
-                # print(topm_ids, topm_ids_order)
-                # exit(0)
 
-                logger_printP.info(f'Eopch: {epoch}, \t Layerid: {layerid}, \t topm_ids: {topm_ids.tolist()}, \ntopm_ids_iScore: {layeri_iScore[topm_ids].tolist()}')
+                # logger_printP.info(f'Eopch: {epoch}, Layerid: {layerid}, topm_ids: {topm_ids.tolist()}, \ntopm_ids_iScore: {layeri_iScore[topm_ids].tolist()}')
+                logger_printP.info(f'Eopch: {epoch}, Layerid: {layerid}, topm_ids: {topm_ids[layerid].tolist()}, \ntopm_ids_iScore: {layeri_iScore[topm_ids[layerid]].tolist()}')
+                
+                #* Compute layeri_p
+                # softmaxP = layeri_softmaxP[topm_ids_order, :]
+                # onehotP = torch.eye(param.shape[0]).to(device)[topm_ids_order, :]
+                softmaxP = layeri_softmaxP[topm_ids_order[layerid], :]
+                onehotP = torch.eye(param.shape[0]).to(device)[topm_ids_order[layerid], :]
 
-                ##* setup conv_module.layeri_softmaxP
-                module.layeri_softmaxP = layeri_softmaxP[topm_ids_order, :]
-
-                ##* setup conv_module.layeri_onehotP
-                # module.layeri_softmaxP = torch.eye(param.shape[0]).cuda()[topm_ids_order, :]
+                #* setup conv_module.layeri_softmaxP
+                if args.p_type == 'softmax':
+                    module.layeri_softmaxP = softmaxP
+                elif args.p_type == 'onehot':
+                    module.layeri_softmaxP = onehotP
+                else:
+                    raise NotImplementedError
 
 
                 ###* printP
-                bottom_num = layers_cout[layerid]-layers_m[layerid]
+                # bottom_num = layers_cout[layerid]-layers_m[layerid]
 
                 # if bottom_num > 0:
                 #     _, bottom_ids = torch.topk(layeri_iScore, bottom_num, largest=False)
                 
             
             print(f'cost: {time.time()-start:.2f}s')
-            del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore, topm_ids
+            del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore
 
-            train(model, optimizer, loader.trainLoader, args, epoch)
+            train(model, optimizer, loader.trainLoader, args, epoch, fused_conv_names, fused_conv_modules, topm_ids)
             scheduler.step()
             test_acc = float(test(model, loader.testLoader))
 
