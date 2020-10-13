@@ -11,15 +11,8 @@ python main_cifar.py \
 --lr_type 'step' \
 --momentum 0.9 \
 --weight_decay 5e-4 \
---arch resnet56 \
---cprate '[0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+ \
-          [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+ \
-          [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+ \
-          [0.0]+[0.0]+[0.0]' \
---t_expression '0.1' \
---p_type 'softmax' \
---kl_add 1e-7 \
---compute_wd \
---job_dir '/media/disk1/cbh/EXP/20.09/cvpr21/1008/res56_t=0.1_p=softmax_kl-add=1e-7_compute-wd_r3' \
+--arch vgg16 \
+--cprate '[0.19]*2+[0.35]*2+[0.54]*3+[0.84]*3+[0.76]*3' \
+--job_dir '/media/disk1/cbh/EXP/20.09/cvpr21/1013/vgg16_cp1_r0' \
 --reset \
 --gpus 0

@@ -17,6 +17,7 @@ import numpy as np
 from collections import OrderedDict
 from thop import profile
 from scipy.spatial.distance import cdist
+import math
 
 
 
@@ -35,88 +36,80 @@ if args.data_set == 'cifar10':
 else:
     raise NotImplementedError
 
-default_cprate={
-    #* vgg16-ABCPlus
-    # 'vgg16':    [0.2]*3+[0.4]+[0.7]+[0.2]+[0.8]+[0.7]+[0.8]+[0.7]+[0.2]+[0.8]+[0.9],
 
-    #* vgg16-HRankPlus
+default_cprate={
+    #* ==================== vgg16-ABCPlus ====================
+    'vgg16':    [0.2]*3+[0.4]+[0.7]+[0.2]+[0.8]+[0.7]+[0.8]+[0.7]+[0.2]+[0.8]+[0.9],
+    #* ========== vgg16-HRankPlus ==========
     # 'vgg16':    [0.21]*7+[0.75]*5+[0.0],
     # 'vgg16':    [0.3]*7+[0.75]*5+[0.0],
-    'vgg16':    [0.45]*7+[0.78]*5+[0.0],
+    # 'vgg16':    [0.45]*7+[0.78]*5+[0.0],
+    #* ========== vgg16-TEST ==========
+    # 'vgg16':    [0.0]*13,
 
-    #* vgg16-TEST
-    # 'vgg16':    [0.5]*13,
 
-
-    #* ========== resnet56 ====================
+    #* ==================== resnet56 ====================
     #* len(cprate)=(9+9+9)+(3)=30
     #* (9+9+9) is stage1~3's conv1 cprate
     #* (3) is stage1~3's conv2's cprate, every blocks' conv2's cprate in the same stage should be the same.
     #* pre-conv1's cprate is the same as stage1's conv2's cprate
-    #* ===== resnet56-ABCPlus =====
-    'resnet56': [0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+
-                [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+
-                [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+
-                [0.0]+[0.0]+[0.0],
-
-    #* ===== resnet56-HRankPlus =====
-    # 'resnet56':    [0.]+[0.18]*29,
-    # 'resnet56':    [0.]+[0.15]*2+[0.4]*27,
-    # 'resnet56':    [0.]+[0.4]*2+[0.5]*9+[0.6]*9+[0.7]*9,
-
-    #* ===== resnet56-TEST =====
+    #* ========== resnet56-ABCPlus ==========
+    # 'resnet56': [0.6]+[0.7]+[0.5]+[0.5]+[0.4]+[0.2]+[0.3]+[0.4]+[0.8]+
+    #             [0.7]+[0.6]+[0.9]+[0.8]+[0.9]+[0.8]+[0.4]+[0.2]+[0.2]+
+    #             [0.7]+[0.3]+[0.8]+[0.4]+[0.3]+[0.7]+[0.2]+[0.4]+[0.8]+
+    #             [0.0]+[0.0]+[0.0],
+    #* ========== resnet56-HRankPlus ==========
+    # 'resnet56':    [0.18]*29+[0.],
+    # 'resnet56':    [0.4]*27+[0.]+[0.15]*2,
+    # 'resnet56':    [0.5]*9+[0.6]*9+[0.7]*9+[0.]+[0.4]*2,
+    #* ========== resnet56-TEST ==========
     # 'resnet56': [0.1]*9 + [0.2]*9 + [0.3]*9 + [0.4]+[0.5]+[0.6],
 
 
-    #* ========== resnet110 ====================
+    #* ==================== resnet110 ====================
     #* len(cprate)=(18+18+18)+(3)=57
     #* (18+18+18) is stage1~3's conv1 cprate
     #* (3) is stage1~3's conv2's cprate, every blocks' conv2's cprate in the same stage should be the same.
     #* pre-conv1's cprate is the same as stage1's conv2's cprate
-    #* ===== resnet110-ABCPlus =====
-    'resnet110':[0.2]+[0.0]+[0.2]+[0.3]+[0.6]+[0.7]+[0.1]+[0.3]+[0.3]+[0.4]+[0.7]+[0.7]+[0.5]+[0.1]+[0.3]+[0.0]+[0.6]+[0.0]+
-                [0.2]+[0.5]+[0.0]+[0.6]+[0.7]+[0.5]+[0.7]+[0.7]+[0.3]+[0.4]+[0.0]+[0.3]+[0.1]+[0.5]+[0.0]+[0.1]+[0.0]+[0.7]+
-                [0.0]+[0.1]+[0.3]+[0.3]+[0.3]+[0.1]+[0.2]+[0.5]+[0.7]+[0.2]+[0.4]+[0.7]+[0.5]+[0.7]+[0.7]+[0.7]+[0.5]+[0.1]+
-                [0.6]+[0.2]+[0.5],
-
-    #* ===== resnet110-HRankPlus =====
-    # 'resnet110':[0.]+[0.2]*2+[0.3]*18+[0.35]*36,
-    # 'resnet110':[0.]+[0.25]*2+[0.4]*18+[0.55]*36,
-    # 'resnet110':[0.]+[0.4]*2+[0.5]*18+[0.65]*36,
-
-    #* ===== resnet110-TEST =====
+    #* ========== resnet110-ABCPlus ==========
+    # 'resnet110':[0.2]+[0.0]+[0.2]+[0.3]+[0.6]+[0.7]+[0.1]+[0.3]+[0.3]+[0.4]+[0.7]+[0.7]+[0.5]+[0.1]+[0.3]+[0.0]+[0.6]+[0.0]+
+    #             [0.2]+[0.5]+[0.0]+[0.6]+[0.7]+[0.5]+[0.7]+[0.7]+[0.3]+[0.4]+[0.0]+[0.3]+[0.1]+[0.5]+[0.0]+[0.1]+[0.0]+[0.7]+
+    #             [0.0]+[0.1]+[0.3]+[0.3]+[0.3]+[0.1]+[0.2]+[0.5]+[0.7]+[0.2]+[0.4]+[0.7]+[0.5]+[0.7]+[0.7]+[0.7]+[0.5]+[0.1]+
+    #             [0.6]+[0.2]+[0.5],
+    #* ========== resnet110-HRankPlus ==========
+    # 'resnet110':[0.3]*18+[0.35]*36+[0.]+[0.2]*2,
+    # 'resnet110':[0.4]*18+[0.55]*36+[0.]+[0.25]*2,
+    # 'resnet110':[0.5]*18+[0.65]*36+[0.]+[0.4]*2,
+    #* ========== resnet110-TEST ==========
     # 'resnet110':[0.1]*18 + [0.2]*18 + [0.3]*18 + [0.4]+[0.5]+[0.6],
 
 
-    #* ========== googlenet ====================
-    #* len(cprate)=(1) + (7+7+7+7+7+7+7+7+7)
+
+    #* ==================== googlenet ====================
+    #* len(cprate)=(1) + (7+7+7+7+7+7+7+7+7) = 64
     #* (1) is pre-conv1's cprate
     #* (7+7+7+7+7+7+7+7+7) is block1~9'cprate, every block has 7 conv layers.
-    #* ===== googlenet-ABCPlus =====
-    'googlenet':[0.0]+
+    #* ========== googlenet-ABCPlus ==========
+    # 'googlenet':[0.0]+
 
-                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
+    #             [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
 
-                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
-                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
-                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+    #             [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+    #             [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+    #             [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
 
-                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
-                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
-                [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
+    #             [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
+    #             [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
+    #             [0.0]+ [0.8]+[0.0] +[0.8]+[0.8]+[0.0] + [0.0]+
 
-                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
-                [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0],
-
-
-    #* ===== googlenet-HRankPlus =====
+    #             [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0]+
+    #             [0.0]+ [0.9]+[0.0] +[0.9]+[0.9]+[0.0] + [0.0],
+    #* ========== googlenet-HRankPlus ==========
     # 'googlenet':[0.3]+[0.6]*2+[0.7]*5+[0.8]*2,
     # 'googlenet':[0.4]+[0.85]*2+[0.9]*5+[0.9]*2,
-
-    #* ===== googlenet-TEST =====
-    # 'googlenet':[0.0]+[0.1]+[0.2]+[0.3]+[0.4]+[0.5]+[0.6]+[0.7]+[0.8]+[0.9],    
+    #* ========== googlenet-TEST ==========
+    # 'googlenet':[0.0]*1 + [0.1]*7 + [0.2]*7 + [0.3]*7 + [0.4]*7 + [0.5]*7 + [0.6]*7 + [0.7]*7 + [0.8]*7 + [0.9]*7,
 }
-
 
 
 #* Compute cprate
@@ -129,7 +122,6 @@ logger.info(f'cprate: \n{cprate}')
 
 
 #* Compute resnet lawer-wise cprate
-
 layer_wise_cprate = []
 if 'vgg' in args.arch:
     layer_wise_cprate = cprate
@@ -145,8 +137,6 @@ elif 'resnet' in args.arch:
     layer_wise_cprate.insert(0, cprate[-3])
 
 elif 'googlenet' == args.arch:
-    # block_cprate = [val for val in cprate[1:] for i in range(7)]
-    # layer_wise_cprate = cprate[0:1]+block_cprate
     layer_wise_cprate = cprate
 else:
     raise NotImplementedError
@@ -181,26 +171,27 @@ else:
 # exit(0)
 
 #* Compute flops, flops, puring rate
-# inputs = torch.randn(1, 3, 32, 32)
-# compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
-# origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
+inputs = torch.randn(1, 3, 32, 32)
+compact_flops, compact_params = profile(compact_model, inputs=(inputs, ))
+origin_flops, origin_params = profile(origin_model, inputs=(inputs, ))
 
-# flops_prate = (origin_flops-compact_flops)/origin_flops
-# params_prate = (origin_params-compact_params)/origin_params
-# logger.info(f'{args.arch}\'s baseline model: FLOPs={origin_flops/10**6:.2f}M (0.0%), Params={origin_params/10**6:.2f}M (0.0%)')
-# logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
+flops_prate = (origin_flops-compact_flops)/origin_flops
+params_prate = (origin_params-compact_params)/origin_params
+logger.info(f'{args.arch}\'s baseline model: FLOPs={origin_flops/10**6:.2f}M (0.0%), Params={origin_params/10**6:.2f}M (0.0%)')
+logger.info(f'{args.arch}\'s pruned   model: FLOPs={compact_flops/10**6:.2f}M ({flops_prate*100:.2f}%), Params={compact_params/10**6:.2f}M ({params_prate*100:.2f}%)')
 # exit(0)
 
 
 model = model.to(device)
 
 
+
 if len(args.gpus) != 1:
     model = nn.DataParallel(model, device_ids=args.gpus)
 
 
-# Training function
-def train(model, optimizer, trainLoader, args, epoch, fused_conv_names, fused_conv_modules, topm_ids):
+#* Training function
+def train(model, optimizer, trainLoader, args, epoch):
     print(f'\nEpoch: {epoch+1}')
     model.train()
 
@@ -211,17 +202,13 @@ def train(model, optimizer, trainLoader, args, epoch, fused_conv_names, fused_co
     start_time = time.time()
 
     for batch_idx, (inputs, targets) in enumerate(trainLoader):
+
         inputs, targets = inputs.to(device), targets.to(device)
-
-
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = loss_func(outputs, targets)
         loss.backward()
         losses.update(loss.item(), inputs.size(0))
-        #*
-        if args.compute_wd:
-            weight_decay_Conv2d(fused_conv_names, fused_conv_modules, topm_ids)
 
         optimizer.step()
 
@@ -266,53 +253,26 @@ def test(model, testLoader):
         )
     return accuracy.avg
 
-
-def weight_decay_Conv2d(fused_conv_names, fused_conv_modules, topm_ids):
-    for module in model.modules():
-        if isinstance(module, nn.Conv2d) and not isinstance(module, FuseConv2d):
-            module.weight.grad.data.add_(module.weight.data, alpha=args.weight_decay)
-
-    for fconv_id, module in enumerate(fused_conv_modules):
-        for filter_id in range(module.weight.shape[0]):
-            if filter_id in topm_ids[fconv_id]:
-                module.weight.grad.data[filter_id].add_(module.weight.data[filter_id], alpha=args.weight_decay)
-
-# def weight_decay_Conv2d(fused_conv_names, fused_conv_modules, topm_ids):
-#     fconv_id = -1
-#     for module in model.modules():
-#         if isinstance(module, nn.Conv2d):
-#             if isinstance(module, FuseConv2d):
-#                 fconv_id += 1
-#                 for filter_id in range(module.weight.shape[0]):
-#                     if filter_id in topm_ids[fconv_id]:
-#                         module.weight.grad.data[filter_id].add_(module.weight.data[filter_id], alpha=args.weight_decay)
-#             else:
-#                 module.weight.grad.data.add_(module.weight.data, alpha=args.weight_decay)
-
-# main function
+#* main function
 def main():
     global model, compact_model, origin_model
 
-    #*
-    if args.compute_wd:
-        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
-    else:
-        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.lr_decay_step, gamma=0.1)
 
-    # Resume from checkpoint (Train from pre-train model)
+    #* Resume from checkpoint (Train from pre-train model)
     if args.resume:
-        # Load ckpt file.
+        #* Load ckpt file.
         print('==> Resuming from checkpoint file..')
         assert os.path.isfile(args.resume), 'Error: no checkpoint file found!'
         resume_ckpt = torch.load(args.resume)
 
         state_dict = resume_ckpt['state_dict']
 
-        if len(args.gpus) == 1:  # load model when use single gpu
+        if len(args.gpus) == 1:  #* load model when use single gpu
             model.load_state_dict(state_dict)
-        else:                    # load model when use multi-gpus
+        else:                    #* load model when use multi-gpus
             new_state_dict = OrderedDict()
             for k, v in state_dict.items():
                 if 'module' not in k:
@@ -359,12 +319,7 @@ def main():
         layers_cprate = np.asarray(layer_wise_cprate)
         layers_m = (layers_cout * (1-layers_cprate)).astype(int)
 
-        topm_ids = []
-        topm_ids_order = []
         for epoch in range(start_epoch, start_epoch + args.num_epochs):
-            #* Compute t
-            t=eval(args.t_expression)
-
             #* Compute layeri_param / layeri_negaEudist / layeri_softmaxP / layeri_KL / layeri_iScore
             start = time.time()
             for layerid, module in enumerate(fused_conv_modules):
@@ -375,15 +330,21 @@ def main():
                 #* Compute layeri_param
                 layeri_param = torch.reshape(param.detach(), (param.shape[0], -1))      #* layeri_param.shape=[cout, cin, k, k], layeri_param[j] means filterj's weight.
 
+                #* Compute layeri_Eudist
+                layeri_Eudist = cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)
+
+                layeri_Eudist = layeri_Eudist
+
                 #* Compute layeri_negaEudist
-                layeri_negaEudist = -torch.from_numpy(cdist(layeri_param.cpu(), layeri_param.cpu(), metric='euclidean').astype(np.float32)).to(device)
+                layeri_negaEudist = -torch.from_numpy(layeri_Eudist).to(device)
 
                 #* Compute layeri_softmaxP
                 softmax = nn.Softmax(dim=1)
-                layeri_softmaxP = softmax(torch.div(layeri_negaEudist, t))      #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
+
+                layeri_softmaxP = softmax(layeri_negaEudist / 0.1)        #* layeri_softmaxP.shape=[cout, cout], layeri_softmaxP[j] means filterj's softmax vector P.
 
                 #* Compute layeri_KL
-                layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/(layeri_softmaxP+args.kl_add)).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
+                layeri_KL = torch.mean(layeri_softmaxP[:,None,:] * (layeri_softmaxP[:,None,:]/(layeri_softmaxP+1e-7)).log(), dim = 2)      #* layeri_KL.shape=[cout, cout], layeri_KL[j, k] means KL divergence between filterj and filterk
 
                 #* Compute layeri_iScore
                 layeri_iScore_kl = torch.sum(layeri_KL, dim=1)
@@ -391,37 +352,17 @@ def main():
 
 
                 #* setup conv_module.layeri_topm_filters_id
-                # _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
-                # _, topm_ids_order = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
-                if epoch == 0:
-                    _, topmid_tmp = torch.topk(layeri_iScore, layers_m[layerid])
-                    _, topmid_order_tmp = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
-                    topm_ids.append(topmid_tmp)
-                    topm_ids_order.append(topmid_order_tmp)
-                else:
-                    if args.fix_topm:
-                        pass
-                    else:
-                        _, topm_ids[layerid] = torch.topk(layeri_iScore, layers_m[layerid])
-                        _, topm_ids_order[layerid] = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
+                _, topm_ids = torch.topk(layeri_iScore, layers_m[layerid])
+                _, topm_ids_order = torch.topk(layeri_iScore, layers_m[layerid], sorted=False)
 
-
-                # logger_printP.info(f'Eopch: {epoch}, Layerid: {layerid}, topm_ids: {topm_ids.tolist()}, \ntopm_ids_iScore: {layeri_iScore[topm_ids].tolist()}')
-                logger_printP.info(f'Eopch: {epoch}, Layerid: {layerid}, topm_ids: {topm_ids[layerid].tolist()}, \ntopm_ids_iScore: {layeri_iScore[topm_ids[layerid]].tolist()}')
+                logger_printP.info(f'Eopch: {epoch}, Layerid: {layerid}, topm_ids: {topm_ids.tolist()}, \ntopm_ids_iScore: {layeri_iScore[topm_ids].tolist()}')
                 
                 #* Compute layeri_p
-                # softmaxP = layeri_softmaxP[topm_ids_order, :]
-                # onehotP = torch.eye(param.shape[0]).to(device)[topm_ids_order, :]
-                softmaxP = layeri_softmaxP[topm_ids_order[layerid], :]
-                onehotP = torch.eye(param.shape[0]).to(device)[topm_ids_order[layerid], :]
+                softmaxP = layeri_softmaxP[topm_ids_order, :]
+                onehotP = torch.eye(param.shape[0]).to(device)[topm_ids_order, :]
 
                 #* setup conv_module.layeri_softmaxP
-                if args.p_type == 'softmax':
-                    module.layeri_softmaxP = softmaxP
-                elif args.p_type == 'onehot':
-                    module.layeri_softmaxP = onehotP
-                else:
-                    raise NotImplementedError
+                module.layeri_softmaxP = softmaxP
 
 
                 ###* printP
@@ -434,12 +375,13 @@ def main():
             print(f'cost: {time.time()-start:.2f}s')
             del param, layeri_param, layeri_negaEudist, layeri_KL, layeri_iScore
 
-            train(model, optimizer, loader.trainLoader, args, epoch, fused_conv_names, fused_conv_modules, topm_ids)
+            train(model, optimizer, loader.trainLoader, args, epoch)
             scheduler.step()
             test_acc = float(test(model, loader.testLoader))
 
             is_best = best_acc < test_acc
             best_acc = max(best_acc, test_acc)
+
 
             model_state_dict = model.module.state_dict() if len(args.gpus) > 1 else model.state_dict()
             
@@ -480,12 +422,11 @@ def main():
 
         logger.info(f'Best model accuracy: {best_acc:.2f}')
 
-
         #* Test compact model
         compact_model = compact_model.to(device)
         
         compact_state_dict = torch.load(f'{args.job_dir}/checkpoint/model_best_compact.pt')
-        compact_model.load_state_dict(compact_state_dict)
+        compact_model.load_state_dict(compact_state_dict, strict=False)
         
         compact_test_acc = float(test(compact_model, loader.testLoader))
         logger.info(f'Best Compact model accuracy:{compact_test_acc:.2f}%')

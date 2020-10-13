@@ -146,39 +146,7 @@ parser.add_argument(
     help='compress rate of each conv.'
 )
 
-parser.add_argument(
-    '--t_expression',
-    type=str,
-    default='1 - epoch / args.num_epochs',
-    help="Choose from ['0.1', '0.5', '1.0', '1-(epoch/args.num_epochs)**1.0', '((epoch+1)/args.num_epochs)**1.0']"
-)
 
-parser.add_argument(
-    '--p_type',
-    type=str,
-    default='softmax',
-    help='Choose from [softmax, onehot]'
-)
-
-parser.add_argument(
-    '--kl_add',
-    type=float,
-    default=1e-7,
-    help='Choose from [1e-4, 1e-5 1e-6, 1e-7]'
-)
-
-parser.add_argument(
-    '--fix_topm',
-    default=False,
-    action='store_true',
-    help='fix topm'
-)
-
-parser.add_argument(
-    '--compute_wd',
-    default=False,
-    action='store_true',
-    help='compute weight decay.'
-)
 
 args = parser.parse_args()
+
