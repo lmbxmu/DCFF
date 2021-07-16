@@ -1,4 +1,4 @@
-# Dynamic-Coded Filter Fusion for Training Compact CNNs
+# Training Compact CNNs for Image Classification using Dynamic-coded Filter Fusion
 
 
 ## Running Code
