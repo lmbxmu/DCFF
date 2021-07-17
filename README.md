@@ -1,4 +1,4 @@
-# Training Compact CNNs for Image Classification using Dynamic-coded Filter Fusion
+# Training Compact CNNs for Image Classification using Dynamic-coded Filter Fusion ![]( https://visitor-badge.glitch.me/badge?page_id=lmbxmu.dcff).
 
 
 ## Running Code
