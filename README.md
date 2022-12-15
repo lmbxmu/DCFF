@@ -223,11 +223,31 @@ python test_compact_model.py \
 --gpus 0
 ```
 
-| Full Model   | Flops(PR)        | Parameter(PR)   | lr_type | Top1-Accuracy | Top5- Accuracy | Model                                                        |
-| ------------ | ---------------- | --------------- | ------- | ------------- | -------------- | ------------------------------------------------------------ |
-| ResNet-50    | 0.96B (76.70%)   | 7.40M (71.03%)  | step    | 71.54%        | 90.57%         | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
-| ResNet-50    | 1.49B (63.75%)   | 10.58M (58.60%) | step    | 74.21%        | 91.93%         | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
-| ResNet-50    | 2.25B (45.30%)   | 15.16M (40.67%) | step    | 75.18%        | 92.56%         | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
-| ResNet-50    | 1.52B (62.96%)   | 11.05M (56.77%) | cos     | 75.60%        | 92.55%         | [pruned](https://drive.google.com/drive/folders/1lp0cY_5n1ZBZAFQQcJEewFXNItkqYftI?usp=sharing) |
-| ResNet-50    | 1.38B (66.41%)   | 11.81M (53.77%) | cos     | 74.85%        | 92.41%         | [pruned](https://drive.google.com/drive/folders/1KnTz3vVmy66iBWEqUcERgpCaSzZfDikx?usp=sharing) |
-| ResNet-50    | 1.02B (75.11%)   | 6.56M (74.33%)  | cos     | 73.81%        | 91.59%         | [pruned](https://drive.google.com/drive/folders/1GIDj-QuWeLL-_U1BTXqWmbOLRoGNErVf?usp=sharing) |
+| Full Model | Flops(PR)      | Parameter(PR)   | lr_type | Top1-Accuracy | Top5- Accuracy | Model                                                        |
+| ---------- | -------------- | --------------- | ------- | ------------- | -------------- | ------------------------------------------------------------ |
+| ResNet-50  | 0.96B (76.70%) | 7.40M (71.03%)  | step    | 71.54%        | 90.57%         | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
+| ResNet-50  | 1.49B (63.75%) | 10.58M (58.60%) | step    | 74.21%        | 91.93%         | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
+| ResNet-50  | 2.25B (45.30%) | 15.16M (40.67%) | step    | 75.18%        | 92.56%         | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
+| ResNet-50  | 1.52B (62.96%) | 11.05M (56.77%) | cos     | 75.60%        | 92.55%         | [pruned](https://drive.google.com/drive/folders/1lp0cY_5n1ZBZAFQQcJEewFXNItkqYftI?usp=sharing) |
+| ResNet-50  | 1.38B (66.41%) | 11.81M (53.77%) | cos     | 74.85%        | 92.41%         | [pruned](https://drive.google.com/drive/folders/1KnTz3vVmy66iBWEqUcERgpCaSzZfDikx?usp=sharing) |
+| ResNet-50  | 1.02B (75.11%) | 6.56M (74.33%)  | cos     | 73.81%        | 91.59%         | [pruned](https://drive.google.com/drive/folders/1GIDj-QuWeLL-_U1BTXqWmbOLRoGNErVf?usp=sharing) |
+
+
+
+| Model              | Top1-Accuracy | Flops | Parameter | Link                                                         |
+| ------------------ | ------------- | ----- | --------- | ------------------------------------------------------------ |
+| DCFF$_{manually}$  | 71.54%        | 960M  | 7.40M     | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
+| DCFF$_{ABCPruner}$ | 72.19%        | 945M  | 7.35M     | [pruned](https://drive.google.com/drive/folders/1aYK-VMTFAWgxqB-tIcfl5pTbH_tnxlOV?usp=share_link) |
+| DCFF$_{manually}$  | 74.21%        | 1490M | 10.58M    | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
+| DCFF$_{ABCPruner}$ | 73.78%        | 1295M | 9.10M     | [pruned](https://drive.google.com/drive/folders/1KSzb7NHFkAhOTrhhognjl3rYldfp3cbY?usp=share_link) |
+| DCFF$_{manually}$  | 74.21%        | 1490M | 10.58M    | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
+| DCFF$_{ABCPruner}$ | 74.73%        | 1794M | 11.24M    | [pruned](https://drive.google.com/drive/folders/1eDiCkKbqRpTy6s6lvyKyxxAx7SIVu8kl?usp=share_link) |
+| DCFF$_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
+| DCFF$_{ABCPruner}$ | 74.83%        | 1891M | 11.75M    | [pruned](https://drive.google.com/drive/folders/1qpz0n1uE-mQ4PtgjJbEWGbYJ3gzq6oN7?usp=share_link) |
+| DCFF$_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
+| DCFF$_{ABCPruner}$ | 75.79%        | 2556M | 18.02M    | [pruned](https://drive.google.com/drive/folders/1a7i29gd4p8s7nEH3lKGPT36BwPh_Gh0C?usp=share_link) |
+| DCFF$_{manually}$  | 71.54%        | 960M  | 7.40M     | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
+| DCFF$_{EagleEye}$  | 73.18%        | 1040M | 6.99M     | [pruned](https://drive.google.com/drive/folders/1E8MDiERJyUbXd6adWc-aQXKNA5YXrov2?usp=share_link) |
+| DCFF$_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
+| DCFF$_{EagleEye}$  | 75.60%        | 2070M | 14.41M    | [pruned](https://drive.google.com/drive/folders/104tyqYWBb7TH3qAu4xP4-bkGf8KUTnyv?usp=share_link) |
+
