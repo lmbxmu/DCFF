@@ -236,18 +236,18 @@ python test_compact_model.py \
 
 | Model              | Top1-Accuracy | Flops | Parameter | Link                                                         |
 | ------------------ | ------------- | ----- | --------- | ------------------------------------------------------------ |
-| DCFF$_{manually}$  | 71.54%        | 960M  | 7.40M     | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
-| DCFF$_{ABCPruner}$ | 72.19%        | 945M  | 7.35M     | [pruned](https://drive.google.com/drive/folders/1aYK-VMTFAWgxqB-tIcfl5pTbH_tnxlOV?usp=share_link) |
-| DCFF$_{manually}$  | 74.21%        | 1490M | 10.58M    | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
-| DCFF$_{ABCPruner}$ | 73.78%        | 1295M | 9.10M     | [pruned](https://drive.google.com/drive/folders/1KSzb7NHFkAhOTrhhognjl3rYldfp3cbY?usp=share_link) |
-| DCFF$_{manually}$  | 74.21%        | 1490M | 10.58M    | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
-| DCFF$_{ABCPruner}$ | 74.73%        | 1794M | 11.24M    | [pruned](https://drive.google.com/drive/folders/1eDiCkKbqRpTy6s6lvyKyxxAx7SIVu8kl?usp=share_link) |
-| DCFF$_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
-| DCFF$_{ABCPruner}$ | 74.83%        | 1891M | 11.75M    | [pruned](https://drive.google.com/drive/folders/1qpz0n1uE-mQ4PtgjJbEWGbYJ3gzq6oN7?usp=share_link) |
-| DCFF$_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
-| DCFF$_{ABCPruner}$ | 75.79%        | 2556M | 18.02M    | [pruned](https://drive.google.com/drive/folders/1a7i29gd4p8s7nEH3lKGPT36BwPh_Gh0C?usp=share_link) |
-| DCFF$_{manually}$  | 71.54%        | 960M  | 7.40M     | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
-| DCFF$_{EagleEye}$  | 73.18%        | 1040M | 6.99M     | [pruned](https://drive.google.com/drive/folders/1E8MDiERJyUbXd6adWc-aQXKNA5YXrov2?usp=share_link) |
-| DCFF$_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
-| DCFF$_{EagleEye}$  | 75.60%        | 2070M | 14.41M    | [pruned](https://drive.google.com/drive/folders/104tyqYWBb7TH3qAu4xP4-bkGf8KUTnyv?usp=share_link) |
+| DCFF $_{manually}$  | 71.54%        | 960M  | 7.40M     | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
+| DCFF $_{ABCPruner}$ | 72.19%        | 945M  | 7.35M     | [pruned](https://drive.google.com/drive/folders/1aYK-VMTFAWgxqB-tIcfl5pTbH_tnxlOV?usp=share_link) |
+| DCFF $_{manually}$  | 74.21%        | 1490M | 10.58M    | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
+| DCFF $_{ABCPruner}$ | 73.78%        | 1295M | 9.10M     | [pruned](https://drive.google.com/drive/folders/1KSzb7NHFkAhOTrhhognjl3rYldfp3cbY?usp=share_link) |
+| DCFF $_{manually}$  | 74.21%        | 1490M | 10.58M    | [pruned](https://drive.google.com/drive/folders/1E4QjP53_X8epM7NgwLQU3MH3SCV82cPx?usp=sharing) |
+| DCFF $_{ABCPruner}$ | 74.73%        | 1794M | 11.24M    | [pruned](https://drive.google.com/drive/folders/1eDiCkKbqRpTy6s6lvyKyxxAx7SIVu8kl?usp=share_link) |
+| DCFF $_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
+| DCFF $_{ABCPruner}$ | 74.83%        | 1891M | 11.75M    | [pruned](https://drive.google.com/drive/folders/1qpz0n1uE-mQ4PtgjJbEWGbYJ3gzq6oN7?usp=share_link) |
+| DCFF $_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
+| DCFF $_{ABCPruner}$ | 75.79%        | 2556M | 18.02M    | [pruned](https://drive.google.com/drive/folders/1a7i29gd4p8s7nEH3lKGPT36BwPh_Gh0C?usp=share_link) |
+| DCFF $_{manually}$  | 71.54%        | 960M  | 7.40M     | [pruned](https://drive.google.com/drive/folders/1Zf0fsfAsgi0jB1ffjAXibzGAeo2MUCSg?usp=sharing) |
+| DCFF $_{EagleEye}$  | 73.18%        | 1040M | 6.99M     | [pruned](https://drive.google.com/drive/folders/1E8MDiERJyUbXd6adWc-aQXKNA5YXrov2?usp=share_link) |
+| DCFF $_{manually}$  | 75.18%        | 2250M | 15.16M    | [pruned](https://drive.google.com/drive/folders/11OZ1-6h3XRad5shhR5zGNN9yUpIaDvjN?usp=sharing) |
+| DCFF $_{EagleEye}$  | 75.60%        | 2070M | 14.41M    | [pruned](https://drive.google.com/drive/folders/104tyqYWBb7TH3qAu4xP4-bkGf8KUTnyv?usp=share_link) |
 
